@@ -1,0 +1,113 @@
+
+--- ИНСТРУКЦИЯ ДЛЯ ИИ ---
+
+РОЛЬ ИИ: Опытный C# разработчик игр на Unity.
+  - В совершенстве владеет принципами SOLID, ООП и паттернами проектирования (например, ECS, паттерн Компонент).
+  - Специализация: физика, контроллеры персонажей (особенно сложные, основанные на узлах/физике), оптимизация и архитектура кода.
+  - Цель: Предоставлять точный, чистый и оптимальный C# код, объяснять сложные концепции, давать советы по архитектуре и помогать в реализации геймдизайнерских идей.
+
+РОЛЬ ПОЛЬЗОВАТЕЛЯ: Начинающий геймдизайнер.
+  - Заинтересован в понимании, почему код написан именно так, и как мои дизайнерские решения влияют на архитектуру.
+  - Цель: Получать понятные объяснения, конкретные рекомендации по коду и реализовывать новые функции в соответствии с лучшими практиками.
+
+ПРАВИЛА ОТВЕТА ИИ:
+1. Всегда отвечай с точки зрения опытного C# разработчика, адаптируя сложные объяснения для начинающего геймдизайнера.
+2. При предложении изменений в коде, ссылайся на конкретные принципы (например, "Разделение логики в SlimeCharacterController нарушает SRP, лучше использовать паттерн Компонент").
+3. Указывай, в каком файле проекта следует внести изменения.
+4. При внесении изменений в скрипт, пиши изменный скрипт полностью, а не отдельную часть.
+
+--- КОНЕЦ ИНСТРУКЦИИ ДЛЯ ИИ ---
+
+--- START OF FILE all_cs_files.txt ---
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Assets\Sctipts\Camera.cs
+================================================================================
+
+using UnityEngine;
+
+public class CameraFollow : MonoBehaviour
+{
+    [Header("Target")]
+    public Transform player;       // Ссылка на игрока
+
+    [Header("Settings")]
+    public float smoothSpeed = 5f; // Насколько плавно камера догоняет игрока (чем больше, тем резче)
+
+    [Header("Limits")]
+    // Координаты границ, за которые центр камеры не может выехать
+    public Vector2 minPosition;    // Левый нижний угол
+    public Vector2 maxPosition;    // Правый верхний угол
+
+    void LateUpdate()
+    {
+        if (player == null) return;
+
+        // 1. Определяем, куда камера ХОЧЕТ попасть (позиция игрока + сохраняем Z камеры)
+        Vector3 targetPosition = new Vector3(player.position.x, player.position.y, transform.position.z);
+
+        // 2. Ограничиваем эту позицию рамками (Clamp)
+        targetPosition.x = Mathf.Clamp(targetPosition.x, minPosition.x, maxPosition.x);
+        targetPosition.y = Mathf.Clamp(targetPosition.y, minPosition.y, maxPosition.y);
+
+        // 3. Плавно перемещаем камеру к этой точке
+        transform.position = Vector3.Lerp(transform.position, targetPosition, smoothSpeed * Time.deltaTime);
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Assets\Sctipts\PlayerController.cs
+================================================================================
+
+using UnityEngine;
+using UnityEngine.InputSystem; // ВАЖНО: Подключаем новую систему
+
+public class PlayerController : MonoBehaviour
+{
+    [Header("Settings")]
+    public float moveSpeed = 10f;
+
+    [Header("References")]
+    public Camera cam;
+    public Rigidbody2D rb;
+
+    private Vector2 movement;
+    private Vector2 mousePos;
+
+    [HideInInspector] public float speedMultiplier = 1f;
+
+    void Update()
+    {
+        // === ИСПРАВЛЕНИЕ ПОД NEW INPUT SYSTEM ===
+
+        // 1. Считываем клавиатуру напрямую
+        movement = Vector2.zero;
+        if (Keyboard.current != null)
+        {
+            if (Keyboard.current.wKey.isPressed) movement.y += 1;
+            if (Keyboard.current.sKey.isPressed) movement.y -= 1;
+            if (Keyboard.current.aKey.isPressed) movement.x -= 1;
+            if (Keyboard.current.dKey.isPressed) movement.x += 1;
+        }
+
+        // Нормализуем
+        movement = movement.normalized;
+
+        // 2. Считываем мышь напрямую
+        if (Mouse.current != null)
+        {
+            mousePos = cam.ScreenToWorldPoint(Mouse.current.position.ReadValue());
+        }
+    }
+
+    void FixedUpdate()
+    {
+        // Здесь всё без изменений
+        float currentSpeed = moveSpeed * speedMultiplier;
+        rb.MovePosition(rb.position + movement * currentSpeed * Time.fixedDeltaTime);
+
+        Vector2 lookDir = mousePos - rb.position;
+        float angle = Mathf.Atan2(lookDir.y, lookDir.x) * Mathf.Rad2Deg - 90f;
+        rb.rotation = angle;
+    }
+}
