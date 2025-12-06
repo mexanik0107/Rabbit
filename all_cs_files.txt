@@ -21,7 +21,7 @@
 --- START OF FILE all_cs_files.txt ---
 
 ================================================================================
-ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Assets\Sctipts\Camera.cs
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\Camera.cs
 ================================================================================
 
 using UnityEngine;
@@ -56,7 +56,201 @@ public class CameraFollow : MonoBehaviour
 }
 
 ================================================================================
-ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Assets\Sctipts\PlayerController.cs
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\EnemyAI.cs
+================================================================================
+
+using Mono.Cecil.Cil;
+using UnityEngine;
+[RequireComponent(typeof(Rigidbody2D))]
+public class EnemyAI : MonoBehaviour
+{
+    [Header("Targeting")]
+    public Transform player;
+    public bool findPlayerAutomatically = true;
+    [Header("Movement Stats")]
+    public float moveSpeed = 3f;
+    public float rotationSpeed = 10f;
+
+    [Header("Combat Stats")]
+    public float attackRange = 1.5f;
+    public float attackCooldown = 1f;
+    public float cutenessDamage = 10f; // Сколько "Милоты" добавляет враг при ударе
+
+    private Rigidbody2D _rb;
+    private float _lastAttackTime;
+    private Vector2 _movementVector;
+
+    void Awake()
+    {
+        _rb = GetComponent<Rigidbody2D>();
+    }
+
+    void Start()
+    {
+        if (findPlayerAutomatically && player == null)
+        {
+            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj != null)
+            {
+                player = playerObj.transform;
+            }
+        }
+    }
+
+    void Update()
+    {
+        if (player == null) return;
+
+        float distanceToPlayer = Vector2.Distance(transform.position, player.position);
+
+        if (distanceToPlayer > attackRange)
+        {
+            CalculateMovement();
+        }
+        else
+        {
+            StopMovement();
+            if (Time.time >= _lastAttackTime + attackCooldown)
+            {
+                PerformAttack();
+            }
+        }
+
+        RotateTowardsPlayer();
+    }
+
+    void FixedUpdate()
+    {
+        MoveEnemy();
+    }
+
+    private void CalculateMovement()
+    {
+        Vector2 direction = (player.position - transform.position).normalized;
+        _movementVector = direction;
+    }
+
+    private void StopMovement()
+    {
+        _movementVector = Vector2.zero;
+    }
+
+    private void RotateTowardsPlayer()
+    {
+        if (player == null) return;
+        Vector2 direction = player.position - transform.position;
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
+        Quaternion targetRotation = Quaternion.Euler(0, 0, angle);
+        transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+    }
+
+    private void PerformAttack()
+    {
+        _lastAttackTime = Time.time;
+
+        // === ИЗМЕНЕНИЕ: Взаимодействие с PlayerCuteness ===
+        if (player != null)
+        {
+            PlayerCuteness playerCuteness = player.GetComponent<PlayerCuteness>();
+            if (playerCuteness != null)
+            {
+                // "Атака" врага увеличивает шкалу милоты игрока
+                playerCuteness.AddCuteness(cutenessDamage);
+                Debug.Log($"{name} добавил игроку милоты!");
+            }
+        }
+    }
+
+    private void MoveEnemy()
+    {
+        _rb.MovePosition(_rb.position + _movementVector * moveSpeed * Time.fixedDeltaTime);
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, attackRange);
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\EnemyHealth.cs
+================================================================================
+
+using UnityEngine;
+using System; // Нужно для Action
+public class EnemyHealth : MonoBehaviour
+{
+    [Header("Settings")]
+    public float maxHealth = 10f;
+// СОБЫТИЕ: На него подпишется игрок, система очков и спаунер волн
+// "static" означает, что событие общее для всех врагов
+    public static event Action<float> OnEnemyDied;
+
+    private float _currentHealth;
+
+    void OnEnable()
+    {
+        _currentHealth = maxHealth;
+    }
+
+    public void TakeDamage(float damage)
+    {
+        _currentHealth -= damage;
+
+        // Эффект попадания (мигание или частицы) можно вызвать здесь
+        // Но пока оставим логику чистой
+
+        if (_currentHealth <= 0)
+        {
+            Die();
+        }
+    }
+
+    private void Die()
+    {
+        // Вызываем событие "Враг умер". 
+        // Передаем значение (например, сколько "брутальности" восстановит убийство)
+        // 5f - это просто пример значения
+        OnEnemyDied?.Invoke(5f);
+
+        // Уничтожаем объект врага
+        Destroy(gameObject);
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\MinimapFollow.cs
+================================================================================
+
+using UnityEngine;
+
+public class MinimapFollow : MonoBehaviour
+{
+    public Transform player; // Перетащи сюда игрока
+
+    // Если хочешь, чтобы миникарта вращалась вместе с игроком, поставь true
+    public bool rotateWithPlayer = false;
+
+    void LateUpdate()
+    {
+        if (player == null) return;
+
+        // Следим за позицией игрока, но высоту (z) оставляем свою (-10 по стандарту)
+        Vector3 newPosition = player.position;
+        newPosition.z = transform.position.z;
+        transform.position = newPosition;
+
+        if (rotateWithPlayer)
+        {
+            // Вращаем камеру так же, как игрока (вокруг оси Z)
+            transform.rotation = Quaternion.Euler(0, 0, player.eulerAngles.z);
+        }
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\PlayerController.cs
 ================================================================================
 
 using UnityEngine;
@@ -111,3 +305,104 @@ public class PlayerController : MonoBehaviour
         rb.rotation = angle;
     }
 }
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\PlayerCuteness.cs
+================================================================================
+
+using Mono.Cecil.Cil;
+using UnityEngine;
+public class PlayerCuteness : MonoBehaviour
+{
+    [Header("Cuteness Settings")]
+    public float maxCuteness = 100f; // Максимум милоты (Game Over)
+    public float startCuteness = 0f; // Старт (Брутально)
+    [Header("Gameplay Balance")]
+    public float passiveCutenessGain = 1f; // Сколько милоты капает само по себе в секунду (нагнетание)
+
+    // Текущее значение (свойство only-get для других скриптов, менять может только этот скрипт)
+    public float CurrentCuteness { get; private set; }
+
+    private bool _isGameOver = false;
+
+    void Start()
+    {
+        CurrentCuteness = startCuteness;
+    }
+
+    // --- ПОДПИСКА НА СОБЫТИЯ ---
+    // Это паттерн Observer. Мы слушаем, когда умирают враги.
+
+    void OnEnable()
+    {
+        EnemyHealth.OnEnemyDied += OnEnemyKilled;
+    }
+
+    void OnDisable()
+    {
+        EnemyHealth.OnEnemyDied -= OnEnemyKilled;
+    }
+    // ---------------------------
+
+    void Update()
+    {
+        if (_isGameOver) return;
+
+        // Постоянное нагнетание милоты со временем (опционально, усложняет игру)
+        AddCuteness(passiveCutenessGain * Time.deltaTime);
+    }
+
+    // Этот метод вызывается автоматически, когда где-то умирает EnemyHealth
+    private void OnEnemyKilled(float brutailityRestoreAmount)
+    {
+        if (_isGameOver) return;
+
+        // Убийство врага СНИЖАЕТ милоту (делает игру брутальнее)
+        RemoveCuteness(brutailityRestoreAmount);
+    }
+
+    // Метод для вызова врагами при атаке
+    public void AddCuteness(float amount)
+    {
+        if (_isGameOver) return;
+
+        CurrentCuteness += amount;
+        CurrentCuteness = Mathf.Clamp(CurrentCuteness, 0, maxCuteness);
+
+        CheckGameOver();
+    }
+
+    public void RemoveCuteness(float amount)
+    {
+        if (_isGameOver) return;
+
+        CurrentCuteness -= amount;
+        CurrentCuteness = Mathf.Clamp(CurrentCuteness, 0, maxCuteness);
+    }
+
+    // Вспомогательный метод для UI (возвращает от 0 до 1)
+    public float GetCutenessNormalized()
+    {
+        return CurrentCuteness / maxCuteness;
+    }
+
+    private void CheckGameOver()
+    {
+        if (CurrentCuteness >= maxCuteness)
+        {
+            TriggerGameOver();
+        }
+    }
+
+    private void TriggerGameOver()
+    {
+        _isGameOver = true;
+        Debug.Log("GAME OVER: Вы превратились в зайчика! Слишком мило!");
+
+        // Здесь можно отключить PlayerController
+        GetComponent<PlayerController>().enabled = false;
+
+        // TODO: Запустить анимацию превращения и показать экран проигрыша
+    }
+}
+

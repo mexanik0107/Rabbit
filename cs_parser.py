@@ -110,7 +110,7 @@ def simple_cs_parser(root_dir, output_file):
 
 # Использование
 if __name__ == "__main__":
-    root_directory = "C:\\Users\\mexanik01\\Documents\\GameDev\\Safe Rabbit\\Assets\\Sctipts"  # Ваш оригинальный путь
+    root_directory = "C:\\Users\\mexanik01\\Documents\\GameDev\\Safe Rabbit\\Rabbit\\Assets"  # Ваш оригинальный путь
     output_filename = "all_cs_files.txt"
 
     simple_cs_parser(root_directory, output_filename)

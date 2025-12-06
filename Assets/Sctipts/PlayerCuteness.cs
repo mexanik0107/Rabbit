@@ -1,25 +1,35 @@
-using Mono.Cecil.Cil;
 using UnityEngine;
+
+[RequireComponent(typeof(AudioSource))]
+[RequireComponent(typeof(PlayerController))] // Зависимость, так как мы его отключаем
 public class PlayerCuteness : MonoBehaviour
 {
     [Header("Cuteness Settings")]
-    public float maxCuteness = 100f; // Максимум милоты (Game Over)
-    public float startCuteness = 0f; // Старт (Брутально)
-    [Header("Gameplay Balance")]
-    public float passiveCutenessGain = 1f; // Сколько милоты капает само по себе в секунду (нагнетание)
+    public float maxCuteness = 100f;
+    public float startCuteness = 0f;
 
-    // Текущее значение (свойство only-get для других скриптов, менять может только этот скрипт)
+    [Header("Gameplay Balance")]
+    public float passiveCutenessGain = 1f;
+
+    [Header("Audio")]
+    public AudioClip damageSound;   // Звук, когда милота растет (получаем "урон")
+    public AudioClip restoreSound;  // Звук, когда убиваем врага (восстанавливаем брутальность)
+    public AudioClip gameOverSound; // Звук проигрыша
+
     public float CurrentCuteness { get; private set; }
 
     private bool _isGameOver = false;
+    private AudioSource _audioSource;
+
+    void Awake()
+    {
+        _audioSource = GetComponent<AudioSource>();
+    }
 
     void Start()
     {
         CurrentCuteness = startCuteness;
     }
-
-    // --- ПОДПИСКА НА СОБЫТИЯ ---
-    // Это паттерн Observer. Мы слушаем, когда умирают враги.
 
     void OnEnable()
     {
@@ -30,32 +40,39 @@ public class PlayerCuteness : MonoBehaviour
     {
         EnemyHealth.OnEnemyDied -= OnEnemyKilled;
     }
-    // ---------------------------
 
     void Update()
     {
         if (_isGameOver) return;
-
-        // Постоянное нагнетание милоты со временем (опционально, усложняет игру)
-        AddCuteness(passiveCutenessGain * Time.deltaTime);
+        AddCuteness(passiveCutenessGain * Time.deltaTime, isPassive: true);
     }
 
-    // Этот метод вызывается автоматически, когда где-то умирает EnemyHealth
     private void OnEnemyKilled(float brutailityRestoreAmount)
     {
         if (_isGameOver) return;
 
-        // Убийство врага СНИЖАЕТ милоту (делает игру брутальнее)
         RemoveCuteness(brutailityRestoreAmount);
+
+        // Звук восстановления (приятный звук)
+        if (restoreSound != null)
+        {
+            _audioSource.PlayOneShot(restoreSound);
+        }
     }
 
-    // Метод для вызова врагами при атаке
-    public void AddCuteness(float amount)
+    // Добавил параметр isPassive, чтобы звук не спамил каждую секунду от пассивного прироста
+    public void AddCuteness(float amount, bool isPassive = false)
     {
         if (_isGameOver) return;
 
         CurrentCuteness += amount;
         CurrentCuteness = Mathf.Clamp(CurrentCuteness, 0, maxCuteness);
+
+        // Играем звук "урона" (получения милоты) только если это не пассивное накопление
+        if (!isPassive && damageSound != null && amount > 0)
+        {
+            _audioSource.PlayOneShot(damageSound);
+        }
 
         CheckGameOver();
     }
@@ -68,7 +85,6 @@ public class PlayerCuteness : MonoBehaviour
         CurrentCuteness = Mathf.Clamp(CurrentCuteness, 0, maxCuteness);
     }
 
-    // Вспомогательный метод для UI (возвращает от 0 до 1)
     public float GetCutenessNormalized()
     {
         return CurrentCuteness / maxCuteness;
@@ -87,9 +103,15 @@ public class PlayerCuteness : MonoBehaviour
         _isGameOver = true;
         Debug.Log("GAME OVER: Вы превратились в зайчика! Слишком мило!");
 
-        // Здесь можно отключить PlayerController
+        // Звук проигрыша
+        if (gameOverSound != null)
+        {
+            _audioSource.PlayOneShot(gameOverSound);
+        }
+
         GetComponent<PlayerController>().enabled = false;
 
-        // TODO: Запустить анимацию превращения и показать экран проигрыша
+        // Совет: Здесь лучше выключить музыку уровня или приглушить её, 
+        // но это требует доступа к музыкальному менеджеру.
     }
 }

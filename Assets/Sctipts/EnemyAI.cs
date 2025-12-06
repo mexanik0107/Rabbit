@@ -1,11 +1,13 @@
-using Mono.Cecil.Cil;
 using UnityEngine;
+
 [RequireComponent(typeof(Rigidbody2D))]
+[RequireComponent(typeof(AudioSource))] // Врагу тоже нужен источник звука
 public class EnemyAI : MonoBehaviour
 {
     [Header("Targeting")]
     public Transform player;
     public bool findPlayerAutomatically = true;
+
     [Header("Movement Stats")]
     public float moveSpeed = 3f;
     public float rotationSpeed = 10f;
@@ -13,15 +15,20 @@ public class EnemyAI : MonoBehaviour
     [Header("Combat Stats")]
     public float attackRange = 1.5f;
     public float attackCooldown = 1f;
-    public float cutenessDamage = 10f; // Сколько "Милоты" добавляет враг при ударе
+    public float cutenessDamage = 10f;
+
+    [Header("Audio")]
+    public AudioClip attackSound; // Звук "кусь" или удара
 
     private Rigidbody2D _rb;
+    private AudioSource _audioSource;
     private float _lastAttackTime;
     private Vector2 _movementVector;
 
     void Awake()
     {
         _rb = GetComponent<Rigidbody2D>();
+        _audioSource = GetComponent<AudioSource>();
     }
 
     void Start()
@@ -87,13 +94,17 @@ public class EnemyAI : MonoBehaviour
     {
         _lastAttackTime = Time.time;
 
-        // === ИЗМЕНЕНИЕ: Взаимодействие с PlayerCuteness ===
+        // Воспроизводим звук атаки
+        if (attackSound != null && _audioSource != null)
+        {
+            _audioSource.PlayOneShot(attackSound);
+        }
+
         if (player != null)
         {
             PlayerCuteness playerCuteness = player.GetComponent<PlayerCuteness>();
             if (playerCuteness != null)
             {
-                // "Атака" врага увеличивает шкалу милоты игрока
                 playerCuteness.AddCuteness(cutenessDamage);
                 Debug.Log($"{name} добавил игроку милоты!");
             }
