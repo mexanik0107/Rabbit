@@ -8,8 +8,8 @@ public class EnemyHealth : MonoBehaviour
     public float maxHealth = 10f;
 
     [Header("Audio")]
-    public AudioClip hitSound;  // Звук попадания по врагу
-    public AudioClip deathSound; // Звук смерти врага
+    public AudioClip hitSound;
+    public AudioClip deathSound;
 
     public static event Action<float> OnEnemyDied;
 
@@ -30,10 +30,8 @@ public class EnemyHealth : MonoBehaviour
     {
         _currentHealth -= damage;
 
-        // Звук получения урона
         if (hitSound != null)
         {
-            // Используем PlayOneShot, чтобы звуки могли накладываться (например, очередь из автомата)
             _audioSource.PlayOneShot(hitSound);
         }
 
@@ -45,10 +43,17 @@ public class EnemyHealth : MonoBehaviour
 
     private void Die()
     {
+        // --- НОВОЕ: Проверка на лут ---
+        // Пытаемся найти компонент LootDropper на этом же враге
+        // Если он есть, вызываем метод TryDropLoot()
+        if (TryGetComponent(out LootDropper looter))
+        {
+            looter.TryDropLoot();
+        }
+        // ------------------------------
+
         OnEnemyDied?.Invoke(5f);
 
-        // ВАЖНО: Используем PlayClipAtPoint, так как gameObject сейчас будет уничтожен.
-        // Если использовать _audioSource.Play(), звук прервется мгновенно.
         if (deathSound != null)
         {
             AudioSource.PlayClipAtPoint(deathSound, transform.position);

@@ -21,6 +21,155 @@
 --- START OF FILE all_cs_files.txt ---
 
 ================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Editor\AudioDashboard.cs
+================================================================================
+
+using UnityEngine;
+using UnityEditor;
+
+// Этот класс создает свое собственное окно в Unity
+public class AudioDashboard : EditorWindow
+{
+    // Ссылки на префабы, из которых мы будем тянуть настройки
+    private GameObject _playerPrefab;
+    private GameObject _enemyPrefab;
+
+    // Скроллбар для окна, если настроек будет слишком много
+    private Vector2 _scrollPos;
+
+    // Пункт меню, чтобы открыть окно
+    [MenuItem("Tools/Audio Dashboard 🎧")]
+    public static void ShowWindow()
+    {
+        GetWindow<AudioDashboard>("Audio Config");
+    }
+
+    void OnGUI()
+    {
+        // Красивый заголовок
+        GUILayout.Label("Центр управления звуком", EditorStyles.boldLabel);
+        EditorGUILayout.Space();
+
+        // Поля для перетаскивания префабов
+        GUILayout.Label("1. Перетащи сюда свои префабы (из папки Project):", EditorStyles.helpBox);
+        _playerPrefab = (GameObject)EditorGUILayout.ObjectField("Player Prefab", _playerPrefab, typeof(GameObject), false);
+        _enemyPrefab = (GameObject)EditorGUILayout.ObjectField("Enemy Prefab", _enemyPrefab, typeof(GameObject), false);
+
+        EditorGUILayout.Space();
+        GUILayout.Label("2. Настройки звуков:", EditorStyles.boldLabel);
+
+        // Начало зоны прокрутки
+        _scrollPos = EditorGUILayout.BeginScrollView(_scrollPos);
+
+        if (_playerPrefab != null)
+        {
+            DrawPlayerAudioSettings();
+        }
+        else
+        {
+            EditorGUILayout.HelpBox("Назначь Player Prefab, чтобы видеть его звуки.", MessageType.Info);
+        }
+
+        EditorGUILayout.Space();
+        DrawLine();
+        EditorGUILayout.Space();
+
+        if (_enemyPrefab != null)
+        {
+            DrawEnemyAudioSettings();
+        }
+        else
+        {
+            EditorGUILayout.HelpBox("Назначь Enemy Prefab, чтобы видеть его звуки.", MessageType.Info);
+        }
+
+        EditorGUILayout.EndScrollView();
+    }
+
+    private void DrawPlayerAudioSettings()
+    {
+        GUILayout.Label($"Настройки Игрока ({_playerPrefab.name})", EditorStyles.boldLabel);
+
+        // --- Блок 1: PlayerController (Шаги) ---
+        var playerController = _playerPrefab.GetComponent<PlayerController>();
+        if (playerController != null)
+        {
+            // Создаем "обертку" SerializedObject, чтобы изменения сохранялись корректно (с поддержкой Ctrl+Z)
+            SerializedObject so = new SerializedObject(playerController);
+            so.Update(); // Обновляем данные
+
+            EditorGUILayout.LabelField("Движение (PlayerController)", EditorStyles.miniBoldLabel);
+
+            // Отрисовываем конкретные свойства
+            EditorGUILayout.PropertyField(so.FindProperty("footstepSounds"), new GUIContent("Звуки шагов"), true);
+            EditorGUILayout.PropertyField(so.FindProperty("stepInterval"), new GUIContent("Интервал шага (сек)"));
+
+            so.ApplyModifiedProperties(); // Применяем изменения
+        }
+
+        EditorGUILayout.Space();
+
+        // --- Блок 2: PlayerCuteness (Геймплей) ---
+        var playerCuteness = _playerPrefab.GetComponent<PlayerCuteness>();
+        if (playerCuteness != null)
+        {
+            SerializedObject so = new SerializedObject(playerCuteness);
+            so.Update();
+
+            EditorGUILayout.LabelField("Милота / Геймплей (PlayerCuteness)", EditorStyles.miniBoldLabel);
+
+            EditorGUILayout.PropertyField(so.FindProperty("damageSound"), new GUIContent("Звук получения милоты"));
+            EditorGUILayout.PropertyField(so.FindProperty("restoreSound"), new GUIContent("Звук убийства врага"));
+            EditorGUILayout.PropertyField(so.FindProperty("gameOverSound"), new GUIContent("Звук Game Over"));
+
+            so.ApplyModifiedProperties();
+        }
+    }
+
+    private void DrawEnemyAudioSettings()
+    {
+        GUILayout.Label($"Настройки Врага ({_enemyPrefab.name})", EditorStyles.boldLabel);
+
+        // --- Блок 1: EnemyAI (Атака) ---
+        var enemyAI = _enemyPrefab.GetComponent<EnemyAI>();
+        if (enemyAI != null)
+        {
+            SerializedObject so = new SerializedObject(enemyAI);
+            so.Update();
+
+            EditorGUILayout.LabelField("Бой (EnemyAI)", EditorStyles.miniBoldLabel);
+            EditorGUILayout.PropertyField(so.FindProperty("attackSound"), new GUIContent("Звук Атаки"));
+
+            so.ApplyModifiedProperties();
+        }
+
+        EditorGUILayout.Space();
+
+        // --- Блок 2: EnemyHealth (Получение урона) ---
+        var enemyHealth = _enemyPrefab.GetComponent<EnemyHealth>();
+        if (enemyHealth != null)
+        {
+            SerializedObject so = new SerializedObject(enemyHealth);
+            so.Update();
+
+            EditorGUILayout.LabelField("Здоровье (EnemyHealth)", EditorStyles.miniBoldLabel);
+            EditorGUILayout.PropertyField(so.FindProperty("hitSound"), new GUIContent("Звук получения урона"));
+            EditorGUILayout.PropertyField(so.FindProperty("deathSound"), new GUIContent("Звук смерти"));
+
+            so.ApplyModifiedProperties();
+        }
+    }
+
+    // Вспомогательный метод для рисования разделительной линии
+    private void DrawLine()
+    {
+        Rect rect = EditorGUILayout.GetControlRect(false, 1);
+        rect.height = 1;
+        EditorGUI.DrawRect(rect, new Color(0.5f, 0.5f, 0.5f, 1));
+    }
+}
+
+================================================================================
 ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\Camera.cs
 ================================================================================
 
@@ -59,14 +208,16 @@ public class CameraFollow : MonoBehaviour
 ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\EnemyAI.cs
 ================================================================================
 
-using Mono.Cecil.Cil;
 using UnityEngine;
+
 [RequireComponent(typeof(Rigidbody2D))]
+[RequireComponent(typeof(AudioSource))] // Врагу тоже нужен источник звука
 public class EnemyAI : MonoBehaviour
 {
     [Header("Targeting")]
     public Transform player;
     public bool findPlayerAutomatically = true;
+
     [Header("Movement Stats")]
     public float moveSpeed = 3f;
     public float rotationSpeed = 10f;
@@ -74,15 +225,20 @@ public class EnemyAI : MonoBehaviour
     [Header("Combat Stats")]
     public float attackRange = 1.5f;
     public float attackCooldown = 1f;
-    public float cutenessDamage = 10f; // Сколько "Милоты" добавляет враг при ударе
+    public float cutenessDamage = 10f;
+
+    [Header("Audio")]
+    public AudioClip attackSound; // Звук "кусь" или удара
 
     private Rigidbody2D _rb;
+    private AudioSource _audioSource;
     private float _lastAttackTime;
     private Vector2 _movementVector;
 
     void Awake()
     {
         _rb = GetComponent<Rigidbody2D>();
+        _audioSource = GetComponent<AudioSource>();
     }
 
     void Start()
@@ -148,13 +304,17 @@ public class EnemyAI : MonoBehaviour
     {
         _lastAttackTime = Time.time;
 
-        // === ИЗМЕНЕНИЕ: Взаимодействие с PlayerCuteness ===
+        // Воспроизводим звук атаки
+        if (attackSound != null && _audioSource != null)
+        {
+            _audioSource.PlayOneShot(attackSound);
+        }
+
         if (player != null)
         {
             PlayerCuteness playerCuteness = player.GetComponent<PlayerCuteness>();
             if (playerCuteness != null)
             {
-                // "Атака" врага увеличивает шкалу милоты игрока
                 playerCuteness.AddCuteness(cutenessDamage);
                 Debug.Log($"{name} добавил игроку милоты!");
             }
@@ -178,16 +338,27 @@ public class EnemyAI : MonoBehaviour
 ================================================================================
 
 using UnityEngine;
-using System; // Нужно для Action
+using System;
+
+[RequireComponent(typeof(AudioSource))]
 public class EnemyHealth : MonoBehaviour
 {
     [Header("Settings")]
     public float maxHealth = 10f;
-// СОБЫТИЕ: На него подпишется игрок, система очков и спаунер волн
-// "static" означает, что событие общее для всех врагов
+
+    [Header("Audio")]
+    public AudioClip hitSound;  // Звук попадания по врагу
+    public AudioClip deathSound; // Звук смерти врага
+
     public static event Action<float> OnEnemyDied;
 
     private float _currentHealth;
+    private AudioSource _audioSource;
+
+    void Awake()
+    {
+        _audioSource = GetComponent<AudioSource>();
+    }
 
     void OnEnable()
     {
@@ -198,8 +369,12 @@ public class EnemyHealth : MonoBehaviour
     {
         _currentHealth -= damage;
 
-        // Эффект попадания (мигание или частицы) можно вызвать здесь
-        // Но пока оставим логику чистой
+        // Звук получения урона
+        if (hitSound != null)
+        {
+            // Используем PlayOneShot, чтобы звуки могли накладываться (например, очередь из автомата)
+            _audioSource.PlayOneShot(hitSound);
+        }
 
         if (_currentHealth <= 0)
         {
@@ -209,12 +384,15 @@ public class EnemyHealth : MonoBehaviour
 
     private void Die()
     {
-        // Вызываем событие "Враг умер". 
-        // Передаем значение (например, сколько "брутальности" восстановит убийство)
-        // 5f - это просто пример значения
         OnEnemyDied?.Invoke(5f);
 
-        // Уничтожаем объект врага
+        // ВАЖНО: Используем PlayClipAtPoint, так как gameObject сейчас будет уничтожен.
+        // Если использовать _audioSource.Play(), звук прервется мгновенно.
+        if (deathSound != null)
+        {
+            AudioSource.PlayClipAtPoint(deathSound, transform.position);
+        }
+
         Destroy(gameObject);
     }
 }
@@ -254,12 +432,18 @@ public class MinimapFollow : MonoBehaviour
 ================================================================================
 
 using UnityEngine;
-using UnityEngine.InputSystem; // ВАЖНО: Подключаем новую систему
+using UnityEngine.InputSystem;
 
+// Добавляем требование компонента, чтобы избежать ошибок null reference
+[RequireComponent(typeof(AudioSource))]
 public class PlayerController : MonoBehaviour
 {
     [Header("Settings")]
     public float moveSpeed = 10f;
+
+    [Header("Audio Settings")]
+    public AudioClip[] footstepSounds; // Массив звуков для разнообразия
+    public float stepInterval = 0.5f;  // Как часто играть звук (чем меньше, тем чаще)
 
     [Header("References")]
     public Camera cam;
@@ -267,14 +451,20 @@ public class PlayerController : MonoBehaviour
 
     private Vector2 movement;
     private Vector2 mousePos;
+    private AudioSource _audioSource;
+    private float _stepTimer;
 
     [HideInInspector] public float speedMultiplier = 1f;
 
+    void Awake()
+    {
+        // Кэшируем компонент при инициализации
+        _audioSource = GetComponent<AudioSource>();
+    }
+
     void Update()
     {
-        // === ИСПРАВЛЕНИЕ ПОД NEW INPUT SYSTEM ===
-
-        // 1. Считываем клавиатуру напрямую
+        // 1. Считываем клавиатуру
         movement = Vector2.zero;
         if (Keyboard.current != null)
         {
@@ -284,19 +474,20 @@ public class PlayerController : MonoBehaviour
             if (Keyboard.current.dKey.isPressed) movement.x += 1;
         }
 
-        // Нормализуем
         movement = movement.normalized;
 
-        // 2. Считываем мышь напрямую
+        // 2. Считываем мышь
         if (Mouse.current != null)
         {
             mousePos = cam.ScreenToWorldPoint(Mouse.current.position.ReadValue());
         }
+
+        // 3. Логика звука шагов
+        HandleFootsteps();
     }
 
     void FixedUpdate()
     {
-        // Здесь всё без изменений
         float currentSpeed = moveSpeed * speedMultiplier;
         rb.MovePosition(rb.position + movement * currentSpeed * Time.fixedDeltaTime);
 
@@ -304,34 +495,76 @@ public class PlayerController : MonoBehaviour
         float angle = Mathf.Atan2(lookDir.y, lookDir.x) * Mathf.Rad2Deg - 90f;
         rb.rotation = angle;
     }
+
+    private void HandleFootsteps()
+    {
+        // Если игрок двигается (вектор движения не равен нулю)
+        if (movement.sqrMagnitude > 0.1f)
+        {
+            _stepTimer -= Time.deltaTime;
+
+            if (_stepTimer <= 0)
+            {
+                PlayRandomFootstep();
+                _stepTimer = stepInterval; // Сброс таймера
+            }
+        }
+        else
+        {
+            // Сбрасываем таймер, чтобы при начале движения звук был сразу
+            _stepTimer = 0;
+        }
+    }
+
+    private void PlayRandomFootstep()
+    {
+        if (footstepSounds.Length == 0) return;
+
+        // Выбираем случайный звук из массива для естественности
+        int index = Random.Range(0, footstepSounds.Length);
+
+        // Изменяем высоту тона (pitch) немного, чтобы звуки не казались роботоподобными
+        _audioSource.pitch = Random.Range(0.9f, 1.1f);
+        _audioSource.PlayOneShot(footstepSounds[index]);
+    }
 }
 
 ================================================================================
 ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\PlayerCuteness.cs
 ================================================================================
 
-using Mono.Cecil.Cil;
 using UnityEngine;
+
+[RequireComponent(typeof(AudioSource))]
+[RequireComponent(typeof(PlayerController))] // Зависимость, так как мы его отключаем
 public class PlayerCuteness : MonoBehaviour
 {
     [Header("Cuteness Settings")]
-    public float maxCuteness = 100f; // Максимум милоты (Game Over)
-    public float startCuteness = 0f; // Старт (Брутально)
-    [Header("Gameplay Balance")]
-    public float passiveCutenessGain = 1f; // Сколько милоты капает само по себе в секунду (нагнетание)
+    public float maxCuteness = 100f;
+    public float startCuteness = 0f;
 
-    // Текущее значение (свойство only-get для других скриптов, менять может только этот скрипт)
+    [Header("Gameplay Balance")]
+    public float passiveCutenessGain = 1f;
+
+    [Header("Audio")]
+    public AudioClip damageSound;   // Звук, когда милота растет (получаем "урон")
+    public AudioClip restoreSound;  // Звук, когда убиваем врага (восстанавливаем брутальность)
+    public AudioClip gameOverSound; // Звук проигрыша
+
     public float CurrentCuteness { get; private set; }
 
     private bool _isGameOver = false;
+    private AudioSource _audioSource;
+
+    void Awake()
+    {
+        _audioSource = GetComponent<AudioSource>();
+    }
 
     void Start()
     {
         CurrentCuteness = startCuteness;
     }
-
-    // --- ПОДПИСКА НА СОБЫТИЯ ---
-    // Это паттерн Observer. Мы слушаем, когда умирают враги.
 
     void OnEnable()
     {
@@ -342,32 +575,39 @@ public class PlayerCuteness : MonoBehaviour
     {
         EnemyHealth.OnEnemyDied -= OnEnemyKilled;
     }
-    // ---------------------------
 
     void Update()
     {
         if (_isGameOver) return;
-
-        // Постоянное нагнетание милоты со временем (опционально, усложняет игру)
-        AddCuteness(passiveCutenessGain * Time.deltaTime);
+        AddCuteness(passiveCutenessGain * Time.deltaTime, isPassive: true);
     }
 
-    // Этот метод вызывается автоматически, когда где-то умирает EnemyHealth
     private void OnEnemyKilled(float brutailityRestoreAmount)
     {
         if (_isGameOver) return;
 
-        // Убийство врага СНИЖАЕТ милоту (делает игру брутальнее)
         RemoveCuteness(brutailityRestoreAmount);
+
+        // Звук восстановления (приятный звук)
+        if (restoreSound != null)
+        {
+            _audioSource.PlayOneShot(restoreSound);
+        }
     }
 
-    // Метод для вызова врагами при атаке
-    public void AddCuteness(float amount)
+    // Добавил параметр isPassive, чтобы звук не спамил каждую секунду от пассивного прироста
+    public void AddCuteness(float amount, bool isPassive = false)
     {
         if (_isGameOver) return;
 
         CurrentCuteness += amount;
         CurrentCuteness = Mathf.Clamp(CurrentCuteness, 0, maxCuteness);
+
+        // Играем звук "урона" (получения милоты) только если это не пассивное накопление
+        if (!isPassive && damageSound != null && amount > 0)
+        {
+            _audioSource.PlayOneShot(damageSound);
+        }
 
         CheckGameOver();
     }
@@ -380,7 +620,6 @@ public class PlayerCuteness : MonoBehaviour
         CurrentCuteness = Mathf.Clamp(CurrentCuteness, 0, maxCuteness);
     }
 
-    // Вспомогательный метод для UI (возвращает от 0 до 1)
     public float GetCutenessNormalized()
     {
         return CurrentCuteness / maxCuteness;
@@ -399,10 +638,15 @@ public class PlayerCuteness : MonoBehaviour
         _isGameOver = true;
         Debug.Log("GAME OVER: Вы превратились в зайчика! Слишком мило!");
 
-        // Здесь можно отключить PlayerController
+        // Звук проигрыша
+        if (gameOverSound != null)
+        {
+            _audioSource.PlayOneShot(gameOverSound);
+        }
+
         GetComponent<PlayerController>().enabled = false;
 
-        // TODO: Запустить анимацию превращения и показать экран проигрыша
+        // Совет: Здесь лучше выключить музыку уровня или приглушить её, 
+        // но это требует доступа к музыкальному менеджеру.
     }
 }
-
