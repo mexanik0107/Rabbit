@@ -170,6 +170,45 @@ public class AudioDashboard : EditorWindow
 }
 
 ================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\AmmoPickup.cs
+================================================================================
+
+using UnityEngine;
+
+[RequireComponent(typeof(Collider2D))]
+public class AmmoPickup : MonoBehaviour
+{
+    [Tooltip("Количество патронов в этой коробке")]
+    public int ammoAmount = 10;
+
+    [Tooltip("Звук подбора")]
+    public AudioClip pickupSound;
+
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        // Проверяем, что в нас вошел именно Игрок
+        if (collision.CompareTag("Player"))
+        {
+            // Пытаемся получить компонент стрельбы
+            PlayerShooting shooting = collision.GetComponent<PlayerShooting>();
+
+            if (shooting != null)
+            {
+                shooting.AddAmmo(ammoAmount);
+
+                // Воспроизводим звук (через AudioSource.PlayClipAtPoint, т.к. объект сейчас уничтожится)
+                if (pickupSound != null)
+                {
+                    AudioSource.PlayClipAtPoint(pickupSound, transform.position);
+                }
+
+                Destroy(gameObject);
+            }
+        }
+    }
+}
+
+================================================================================
 ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\Camera.cs
 ================================================================================
 
@@ -347,8 +386,8 @@ public class EnemyHealth : MonoBehaviour
     public float maxHealth = 10f;
 
     [Header("Audio")]
-    public AudioClip hitSound;  // Звук попадания по врагу
-    public AudioClip deathSound; // Звук смерти врага
+    public AudioClip hitSound;
+    public AudioClip deathSound;
 
     public static event Action<float> OnEnemyDied;
 
@@ -369,10 +408,8 @@ public class EnemyHealth : MonoBehaviour
     {
         _currentHealth -= damage;
 
-        // Звук получения урона
         if (hitSound != null)
         {
-            // Используем PlayOneShot, чтобы звуки могли накладываться (например, очередь из автомата)
             _audioSource.PlayOneShot(hitSound);
         }
 
@@ -384,16 +421,66 @@ public class EnemyHealth : MonoBehaviour
 
     private void Die()
     {
+        // --- НОВОЕ: Проверка на лут ---
+        // Пытаемся найти компонент LootDropper на этом же враге
+        // Если он есть, вызываем метод TryDropLoot()
+        if (TryGetComponent(out LootDropper looter))
+        {
+            looter.TryDropLoot();
+        }
+        // ------------------------------
+
         OnEnemyDied?.Invoke(5f);
 
-        // ВАЖНО: Используем PlayClipAtPoint, так как gameObject сейчас будет уничтожен.
-        // Если использовать _audioSource.Play(), звук прервется мгновенно.
         if (deathSound != null)
         {
             AudioSource.PlayClipAtPoint(deathSound, transform.position);
         }
 
         Destroy(gameObject);
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\LootDropper.cs
+================================================================================
+
+using UnityEngine;
+
+public class LootDropper : MonoBehaviour
+{
+    [Header("Loot Settings")]
+    public GameObject ammoPickupPrefab; // Префаб коробки с патронами
+
+    [Range(0f, 1f)]
+    public float dropChance = 0.3f; // Шанс выпадения (0.3 = 30%)
+
+    public int minAmmo = 5;
+    public int maxAmmo = 15;
+
+    // Этот метод мы вызовем из EnemyHealth перед смертью
+    public void TryDropLoot()
+    {
+        if (ammoPickupPrefab == null) return;
+
+        // Бросаем кубик (от 0.0 до 1.0)
+        float roll = Random.value;
+
+        if (roll <= dropChance)
+        {
+            // Определяем кол-во патронов
+            int amount = Random.Range(minAmmo, maxAmmo + 1);
+
+            // Создаем коробку на месте смерти врага
+            GameObject loot = Instantiate(ammoPickupPrefab, transform.position, Quaternion.identity);
+
+            // Настраиваем коробку (передаем в нее кол-во патронов)
+            AmmoPickup pickupScript = loot.GetComponent<AmmoPickup>();
+            if (pickupScript != null)
+            {
+                pickupScript.ammoAmount = amount;
+            }
+        }
     }
 }
 
@@ -648,5 +735,1210 @@ public class PlayerCuteness : MonoBehaviour
 
         // Совет: Здесь лучше выключить музыку уровня или приглушить её, 
         // но это требует доступа к музыкальному менеджеру.
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\PlayerHealth.cs
+================================================================================
+
+using UnityEngine;
+
+public class PlayerHealth : MonoBehaviour
+{
+    [Header("Настройки здоровья")]
+    public float maxHealth = 100f;
+    public float currentHealth;
+    
+    [Header("Ссылки")]
+    public HUD hud;
+    
+    private void Start()
+    {
+        currentHealth = maxHealth;
+        
+        // Инициализируем HUD если он есть
+        if (hud != null)
+        {
+            hud.Initialize(maxHealth);
+            hud.UpdateHealth(currentHealth);
+        }
+    }
+    
+    public void TakeDamage(float damage)
+    {
+        currentHealth -= damage;
+        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+        
+        // Обновляем HUD
+        if (hud != null)
+        {
+            hud.UpdateHealth(currentHealth);
+        }
+        
+        // Проверяем смерть
+        if (currentHealth <= 0)
+        {
+            Die();
+        }
+    }
+    
+    public void Heal(float amount)
+    {
+        currentHealth += amount;
+        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+        
+        if (hud != null)
+        {
+            hud.UpdateHealth(currentHealth);
+        }
+    }
+    
+    private void Die()
+    {
+        Debug.Log("Игрок умер!");
+        // Здесь можно вызвать Game Over меню или перезапуск уровня
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\PlayerShooting.cs
+================================================================================
+
+using UnityEngine;
+using UnityEngine.InputSystem;
+using System.Collections; // Нужно для работы Coroutines (IEnumerator)
+
+public class PlayerShooting : MonoBehaviour
+{
+    [Header("References")]
+    public GameObject bulletPrefab;
+    public Transform firePoint;
+
+    [Header("Weapon Stats")]
+    public float damage = 2f;
+    public float bulletSpeed = 20f;
+    public float fireRate = 0.2f;
+    public float spreadAngle = 5f;
+
+    [Header("Ammo Settings")]
+    public int maxMagazineSize = 10;   // Емкость магазина
+    public int maxTotalAmmo = 60;      // Максимум патронов в запасе
+    public int startTotalAmmo = 30;    // Стартовый запас
+    public float reloadTime = 1.5f;    // Время перезарядки в секундах
+
+    [Header("Audio")]
+    public AudioClip shootSound;
+    public AudioClip reloadSound;      // Звук начала перезарядки
+    public AudioClip emptyClickSound;  // Звук, когда совсем нет патронов
+    private AudioSource _audioSource;
+
+    // Публичные свойства для UI
+    public int CurrentClip { get; private set; }
+    public int CurrentTotalAmmo { get; private set; }
+    public bool IsReloading { get; private set; } // Чтобы UI мог показать полоску перезарядки
+
+    private float _nextFireTime = 0f;
+
+    void Awake()
+    {
+        _audioSource = GetComponent<AudioSource>();
+        if (_audioSource == null)
+            _audioSource = gameObject.AddComponent<AudioSource>();
+    }
+
+    void Start()
+    {
+        CurrentClip = maxMagazineSize;
+        CurrentTotalAmmo = startTotalAmmo;
+        UpdateAmmoDebug();
+    }
+
+    void Update()
+    {
+        // Если мы уже перезаряжаемся, блокируем любое управление оружием
+        if (IsReloading) return;
+
+        // --- Ручная Перезарядка (Кнопка R) ---
+        if (Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
+        {
+            StartReload();
+            return;
+        }
+
+        // --- Стрельба (ЛКМ) ---
+        if (Mouse.current != null && Mouse.current.leftButton.isPressed)
+        {
+            if (Time.time >= _nextFireTime)
+            {
+                TryShoot();
+                _nextFireTime = Time.time + fireRate;
+            }
+        }
+    }
+
+    private void TryShoot()
+    {
+        // 1. Если магазин пуст
+        if (CurrentClip <= 0)
+        {
+            // Автоматическая перезарядка, если есть патроны в запасе
+            if (CurrentTotalAmmo > 0)
+            {
+                StartReload();
+            }
+            else
+            {
+                // Если и в запасе пусто — просто щелкаем
+                PlaySound(emptyClickSound);
+            }
+            return;
+        }
+
+        // 2. Если патроны есть — стреляем
+        Shoot();
+    }
+
+    private void Shoot()
+    {
+        if (bulletPrefab == null || firePoint == null) return;
+
+        // Расчет разброса
+        float randomSpread = Random.Range(-spreadAngle, spreadAngle);
+        Quaternion spreadRotation = Quaternion.Euler(0, 0, randomSpread);
+        Quaternion finalRotation = firePoint.rotation * spreadRotation;
+
+        GameObject bulletObj = Instantiate(bulletPrefab, firePoint.position, finalRotation);
+
+        Projectile projectile = bulletObj.GetComponent<Projectile>();
+        if (projectile != null)
+        {
+            projectile.speed = bulletSpeed;
+            projectile.damage = damage;
+        }
+
+        CurrentClip--;
+
+        PlaySound(shootSound, randomizePitch: true);
+
+        // Лог для отладки
+        if (CurrentClip == 0) Debug.Log("Магазин пуст!");
+    }
+
+    // Публичный метод, чтобы можно было вызвать перезарядку извне (если понадобится)
+    public void StartReload()
+    {
+        // Проверки перед стартом:
+        if (IsReloading) return; // Уже в процессе
+        if (CurrentClip == maxMagazineSize) return; // Магазин полон
+        if (CurrentTotalAmmo <= 0) return; // Нечем заряжать
+
+        // Запускаем корутину (процесс, растянутый во времени)
+        StartCoroutine(ReloadRoutine());
+    }
+
+    private IEnumerator ReloadRoutine()
+    {
+        IsReloading = true;
+        Debug.Log("Перезарядка...");
+
+        PlaySound(reloadSound);
+
+        // Ждем указанное время (reloadTime)
+        yield return new WaitForSeconds(reloadTime);
+
+        // --- Логика пополнения после ожидания ---
+
+        int ammoNeeded = maxMagazineSize - CurrentClip;
+        int ammoToReload = Mathf.Min(ammoNeeded, CurrentTotalAmmo);
+
+        CurrentClip += ammoToReload;
+        CurrentTotalAmmo -= ammoToReload;
+
+        IsReloading = false;
+        Debug.Log("Перезарядка завершена!");
+        UpdateAmmoDebug();
+    }
+
+    public void AddAmmo(int amount)
+    {
+        CurrentTotalAmmo += amount;
+        if (CurrentTotalAmmo > maxTotalAmmo)
+        {
+            CurrentTotalAmmo = maxTotalAmmo;
+        }
+        Debug.Log($"Подобраны патроны: +{amount}. Всего: {CurrentTotalAmmo}");
+
+        // Опционально: если магазин был пуст и мы подобрали патроны, можно автоматически начать перезарядку
+        if (CurrentClip == 0)
+        {
+            StartReload();
+        }
+    }
+
+    private void UpdateAmmoDebug()
+    {
+        Debug.Log($"Ammo: {CurrentClip} / {CurrentTotalAmmo}");
+    }
+
+    private void PlaySound(AudioClip clip, bool randomizePitch = false)
+    {
+        if (clip != null && _audioSource != null)
+        {
+            _audioSource.pitch = randomizePitch ? Random.Range(0.9f, 1.1f) : 1f;
+            _audioSource.PlayOneShot(clip);
+        }
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\Projectile.cs
+================================================================================
+
+using UnityEngine;
+
+[RequireComponent(typeof(Rigidbody2D))]
+[RequireComponent(typeof(Collider2D))]
+public class Projectile : MonoBehaviour
+{
+    [HideInInspector] public float speed;   // �������� ������� �� ������ ��� ��������
+    [HideInInspector] public float damage;  // ���� ������� �� ������ ��� ��������
+
+    private Rigidbody2D _rb;
+    private float _lifetime = 5f; // ������ �� ������ ������: ���� �������� ����� 5 ���, ���� �� � ���� �� �������
+
+    void Awake()
+    {
+        _rb = GetComponent<Rigidbody2D>();
+    }
+
+    void Start()
+    {
+        // ������� �������� "�����" ������������ ���������� ����
+        // (� 2D "����" ������� ������ ��������� �� ����������� ������)
+        _rb.linearVelocity = transform.up * speed;
+
+        // ���������� ���� ����� �����, ����� �� �������� �����
+        Destroy(gameObject, _lifetime);
+    }
+
+    void OnTriggerEnter2D(Collider2D collision)
+    {
+        // ���������, ���� �� � ������� �������� (��� ��� ������ EnemyHealth)
+        EnemyHealth enemy = collision.GetComponent<EnemyHealth>();
+
+        if (enemy != null)
+        {
+            enemy.TakeDamage(damage);
+            Destroy(gameObject); // ���������� ���� ��� ���������
+        }
+        else if (!collision.CompareTag("Player") && !collision.isTrigger)
+        {
+            // ���������� ����, ���� ��� ������ � ����� (�� � ������ � �� � �������)
+            Destroy(gameObject);
+        }
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\WaveManager.cs
+================================================================================
+
+using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq; // Нужен для удобной работы со списками
+
+public class WaveManager : MonoBehaviour
+{
+    [Header("Spawn Settings")]
+    [Tooltip("Все точки на карте, где могут появляться враги")]
+    public List<Transform> allSpawnPoints;
+
+    [Tooltip("Сколько спавнеров использовать одновременно в одной волне? (0 = все сразу)")]
+    public int activeSpawnersCount = 3;
+    public bool randomizeSpawnersEveryWave = true;
+
+    [Header("Wave Progression")]
+    [Tooltip("Множитель количества врагов для каждой следующей волны (например, 1.2 = +20%)")]
+    public float countMultiplier = 1.2f;
+    [Tooltip("Время отдыха между волнами (сек)")]
+    public float timeBetweenWaves = 5f;
+    [Tooltip("Задержка между появлением врагов внутри волны (сек)")]
+    public float spawnRate = 1f;
+
+    [Header("Enemies Configuration")]
+    public List<EnemyWaveConfig> enemyConfigs;
+
+    // Состояние системы
+    private int _currentWaveIndex = 0;
+    private int _enemiesAlive = 0;
+    private bool _isSpawning = false;
+    private bool _waitingForNextWave = false;
+
+    // Список активных точек для текущей волны
+    private List<Transform> _currentWaveSpawners;
+
+    void Start()
+    {
+        if (allSpawnPoints == null || allSpawnPoints.Count == 0)
+        {
+            Debug.LogError("WaveManager: Не назначены точки спавна (Spawn Points)!");
+            enabled = false;
+            return;
+        }
+
+        // Запускаем первую волну
+        StartCoroutine(StartNextWave());
+    }
+
+    void OnEnable()
+    {
+        // Подписываемся на событие смерти из твоего EnemyHealth
+        EnemyHealth.OnEnemyDied += OnEnemyKilled;
+    }
+
+    void OnDisable()
+    {
+        EnemyHealth.OnEnemyDied -= OnEnemyKilled;
+    }
+
+    private void OnEnemyKilled(float unusedFloat)
+    {
+        // Уменьшаем счетчик живых врагов
+        if (_enemiesAlive > 0)
+        {
+            _enemiesAlive--;
+        }
+
+        // Если враги кончились и мы не спавним прямо сейчас -> готовим следующую волну
+        if (_enemiesAlive <= 0 && !_isSpawning && !_waitingForNextWave)
+        {
+            StartCoroutine(StartNextWave());
+        }
+    }
+
+    private IEnumerator StartNextWave()
+    {
+        _waitingForNextWave = true;
+        _currentWaveIndex++;
+
+        Debug.Log($"--- ВОЛНА {_currentWaveIndex} НАЧНЕТСЯ ЧЕРЕЗ {timeBetweenWaves} СЕК ---");
+
+        // Ждем перерыва перед волной
+        yield return new WaitForSeconds(timeBetweenWaves);
+
+        _waitingForNextWave = false;
+        StartCoroutine(SpawnWaveRoutine());
+    }
+
+    private IEnumerator SpawnWaveRoutine()
+    {
+        _isSpawning = true;
+
+        // 1. Выбираем спавнеры для этой волны
+        SelectActiveSpawners();
+
+        // 2. Генерируем список всех врагов на эту волну (очередь спавна)
+        List<GameObject> spawnQueue = GenerateSpawnQueue();
+
+        // Устанавливаем количество живых врагов, которых игроку нужно победить
+        _enemiesAlive = spawnQueue.Count;
+
+        Debug.Log($"Волна {_currentWaveIndex}: Врагов {_enemiesAlive}. Активных точек: {_currentWaveSpawners.Count}");
+
+        // 3. Спавним врагов из очереди
+        foreach (GameObject enemyPrefab in spawnQueue)
+        {
+            // Выбираем случайную точку из АКТИВНЫХ спавнеров
+            Transform spawnPoint = GetRandomActiveSpawner();
+
+            if (spawnPoint != null)
+            {
+                Instantiate(enemyPrefab, spawnPoint.position, Quaternion.identity);
+            }
+
+            // Ждем перед следующим спавном
+            yield return new WaitForSeconds(spawnRate);
+        }
+
+        _isSpawning = false;
+    }
+
+    // Логика выбора спавнеров
+    private void SelectActiveSpawners()
+    {
+        // Если настроено использовать все или число больше чем есть точек -> берем все
+        if (!randomizeSpawnersEveryWave || activeSpawnersCount <= 0 || activeSpawnersCount >= allSpawnPoints.Count)
+        {
+            _currentWaveSpawners = new List<Transform>(allSpawnPoints);
+        }
+        else
+        {
+            // Перемешиваем список всех точек и берем первые N штук
+            // Используем System.Random или Unity Random для перемешивания
+            _currentWaveSpawners = allSpawnPoints.OrderBy(x => Random.value).Take(activeSpawnersCount).ToList();
+        }
+    }
+
+    // Генерация списка врагов с учетом автолевелинга
+    private List<GameObject> GenerateSpawnQueue()
+    {
+        List<GameObject> queue = new List<GameObject>();
+
+        // Рассчитываем текущий множитель: Multiplier ^ (Wave - 1)
+        // Пример: 1.2 ^ 0 = 1; 1.2 ^ 1 = 1.2; 1.2 ^ 2 = 1.44...
+        float currentMultiplier = Mathf.Pow(countMultiplier, _currentWaveIndex - 1);
+
+        foreach (var config in enemyConfigs)
+        {
+            // Базовое кол-во * множитель
+            int countToSpawn = Mathf.RoundToInt(config.baseCount * currentMultiplier);
+
+            for (int i = 0; i < countToSpawn; i++)
+            {
+                queue.Add(config.enemyPrefab);
+            }
+        }
+
+        // Перемешиваем очередь, чтобы враги шли вразнобой (алгоритм Фишера-Йейтса упрощенный)
+        for (int i = 0; i < queue.Count; i++)
+        {
+            GameObject temp = queue[i];
+            int randomIndex = Random.Range(i, queue.Count);
+            queue[i] = queue[randomIndex];
+            queue[randomIndex] = temp;
+        }
+
+        return queue;
+    }
+
+    private Transform GetRandomActiveSpawner()
+    {
+        if (_currentWaveSpawners.Count == 0) return null;
+        return _currentWaveSpawners[Random.Range(0, _currentWaveSpawners.Count)];
+    }
+}
+
+// Вспомогательный класс для настроек в инспекторе
+[System.Serializable]
+public class EnemyWaveConfig
+{
+    public string name = "Enemy Type"; // Просто для удобства в инспекторе
+    public GameObject enemyPrefab;
+    public int baseCount = 5; // Сколько штук спавнить на 1-й волне
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\UI\HUD.cs
+================================================================================
+
+using UnityEngine;
+using UnityEngine.UI;
+
+public class HUD : MonoBehaviour
+{
+    [Header("Здоровье")]
+    public Slider healthSlider;
+    public Image healthFill;
+    public Gradient healthGradient;
+    
+    [Header("Дополнительная информация")]
+    public Text scoreText;
+    public Text ammoText;
+    public Text waveText;
+    
+    [Header("Анимация урона")]
+    public Animator damageAnimator;
+    
+    private float maxHealth = 100f;
+    private float currentHealth = 100f;
+    
+    public void Initialize(float maxHealthValue)
+    {
+        maxHealth = maxHealthValue;
+        currentHealth = maxHealthValue;
+        
+        if (healthSlider != null)
+        {
+            healthSlider.maxValue = maxHealth;
+            healthSlider.value = currentHealth;
+            UpdateHealthColor();
+        }
+    }
+    
+    public void UpdateHealth(float newHealth)
+    {
+        currentHealth = Mathf.Clamp(newHealth, 0, maxHealth);
+        
+        if (healthSlider != null)
+        {
+            healthSlider.value = currentHealth;
+            UpdateHealthColor();
+        }
+        
+        // Анимация получения урона
+        if (damageAnimator != null && newHealth < currentHealth)
+        {
+            damageAnimator.SetTrigger("TakeDamage");
+        }
+    }
+    
+    private void UpdateHealthColor()
+    {
+        if (healthFill != null && healthGradient != null)
+        {
+            float healthPercentage = currentHealth / maxHealth;
+            healthFill.color = healthGradient.Evaluate(healthPercentage);
+        }
+    }
+    
+    public void TakeDamage(float damageAmount)
+    {
+        float newHealth = currentHealth - damageAmount;
+        UpdateHealth(newHealth);
+    }
+    
+    public void Show()
+    {
+        gameObject.SetActive(true);
+    }
+    
+    public void Hide()
+    {
+        gameObject.SetActive(false);
+    }
+    
+    // Дополнительные методы для обновления HUD
+    public void UpdateScore(int score)
+    {
+        if (scoreText != null)
+        {
+            scoreText.text = $"Очки: {score}";
+        }
+    }
+    
+    public void UpdateAmmo(int currentAmmo, int maxAmmo)
+    {
+        if (ammoText != null)
+        {
+            ammoText.text = $"Патроны: {currentAmmo}/{maxAmmo}";
+        }
+    }
+    
+    public void UpdateWave(int waveNumber)
+    {
+        if (waveText != null)
+        {
+            waveText.text = $"Волна: {waveNumber}";
+        }
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\UI\MainMenu.cs
+================================================================================
+
+using UnityEngine;
+using UnityEngine.UI;
+
+public class MainMenu : MonoBehaviour
+{
+    [Header("Ссылки на UI")]
+    public CanvasGroup mainMenuPanel;
+    public Button playButton;
+    public Button settingsButton;
+    public Button exitButton;
+    
+    [Header("Настройки")]
+    public SettingsMenu settingsMenu;
+    
+    private void Start()
+    {
+        InitializeButtons();
+        Show();
+    }
+    
+    private void InitializeButtons()
+    {
+        // Кнопка "Играть"
+        if (playButton != null)
+        {
+            playButton.onClick.RemoveAllListeners();
+            playButton.onClick.AddListener(() =>
+            {
+                PlaySound();
+                PlayGame();
+            });
+        }
+        
+        // Кнопка "Настройки"
+        if (settingsButton != null)
+        {
+            settingsButton.onClick.RemoveAllListeners();
+            settingsButton.onClick.AddListener(() =>
+            {
+                PlaySound();
+                ShowSettings();
+            });
+        }
+        
+        // Кнопка "Выход"
+        if (exitButton != null)
+        {
+            exitButton.onClick.RemoveAllListeners();
+            exitButton.onClick.AddListener(() =>
+            {
+                PlaySound();
+                ExitGame();
+            });
+        }
+    }
+    
+    public void PlayGame()
+    {
+        // Используем SceneLoader для плавной загрузки
+        if (SceneLoader.Instance != null)
+        {
+            SceneLoader.Instance.LoadScene("GameScene");
+        }
+        else
+        {
+            // Если SceneLoader не используется
+            UnityEngine.SceneManagement.SceneManager.LoadScene("GameScene");
+        }
+    }
+    
+    public void ShowSettings()
+    {
+        Hide();
+        if (settingsMenu != null)
+        {
+            settingsMenu.Show();
+        }
+    }
+    
+    public void Show()
+    {
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.ShowCanvasGroup(mainMenuPanel);
+        }
+        else if (mainMenuPanel != null)
+        {
+            mainMenuPanel.alpha = 1;
+            mainMenuPanel.interactable = true;
+            mainMenuPanel.blocksRaycasts = true;
+        }
+    }
+    
+    public void Hide()
+    {
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.HideCanvasGroup(mainMenuPanel);
+        }
+        else if (mainMenuPanel != null)
+        {
+            mainMenuPanel.alpha = 0;
+            mainMenuPanel.interactable = false;
+            mainMenuPanel.blocksRaycasts = false;
+        }
+    }
+    
+    private void PlaySound()
+    {
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.PlaySound(UIManager.Instance.buttonClickSound);
+        }
+    }
+    
+    private void ExitGame()
+    {
+        if (SceneLoader.Instance != null)
+        {
+            SceneLoader.Instance.QuitGame();
+        }
+        else
+        {
+            #if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+            #else
+            Application.Quit();
+            #endif
+        }
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\UI\PauseMenu.cs
+================================================================================
+
+using UnityEngine;
+using UnityEngine.UI;
+
+public class PauseMenu : MonoBehaviour
+{
+    [Header("Ссылки на UI")]
+    public CanvasGroup pauseMenuPanel;
+    public Button resumeButton;
+    public Button settingsButton;
+    public Button mainMenuButton;
+    
+    [Header("Настройки")]
+    public SettingsMenu settingsMenu;
+    
+    private bool isPaused = false;
+    
+    private void Start()
+    {
+        InitializeButtons();
+        Hide();
+    }
+    
+    private void InitializeButtons()
+    {
+        // Кнопка "Продолжить"
+        if (resumeButton != null)
+        {
+            resumeButton.onClick.RemoveAllListeners();
+            resumeButton.onClick.AddListener(() =>
+            {
+                PlaySound();
+                ResumeGame();
+            });
+        }
+        
+        // Кнопка "Настройки"
+        if (settingsButton != null)
+        {
+            settingsButton.onClick.RemoveAllListeners();
+            settingsButton.onClick.AddListener(() =>
+            {
+                PlaySound();
+                ShowSettings();
+            });
+        }
+        
+        // Кнопка "Выход в главное меню"
+        if (mainMenuButton != null)
+        {
+            mainMenuButton.onClick.RemoveAllListeners();
+            mainMenuButton.onClick.AddListener(() =>
+            {
+                PlaySound();
+                ReturnToMainMenu();
+            });
+        }
+    }
+    
+    private void Update()
+    {
+        // Обработка ESC только в игровой сцене
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            TogglePause();
+        }
+    }
+    
+    private void TogglePause()
+    {
+        if (isPaused)
+        {
+            ResumeGame();
+        }
+        else
+        {
+            Show();
+        }
+    }
+    
+    public void Show()
+    {
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.ShowCanvasGroup(pauseMenuPanel);
+            UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
+        }
+        else if (pauseMenuPanel != null)
+        {
+            pauseMenuPanel.alpha = 1;
+            pauseMenuPanel.interactable = true;
+            pauseMenuPanel.blocksRaycasts = true;
+        }
+        
+        PauseGame();
+    }
+    
+    public void Hide()
+    {
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.HideCanvasGroup(pauseMenuPanel);
+            UIManager.Instance.PlaySound(UIManager.Instance.menuCloseSound);
+        }
+        else if (pauseMenuPanel != null)
+        {
+            pauseMenuPanel.alpha = 0;
+            pauseMenuPanel.interactable = false;
+            pauseMenuPanel.blocksRaycasts = false;
+        }
+        
+        ResumeGameTime();
+    }
+    
+    public void ResumeGame()
+    {
+        Hide();
+    }
+    
+    public void ShowSettings()
+    {
+        Hide();
+        if (settingsMenu != null)
+        {
+            settingsMenu.Show();
+        }
+    }
+    
+    private void ReturnToMainMenu()
+    {
+        // Сбрасываем паузу
+        ResumeGameTime();
+        
+        // Загружаем меню
+        if (SceneLoader.Instance != null)
+        {
+            SceneLoader.Instance.LoadScene("MenuScene");
+        }
+        else
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene("MenuScene");
+        }
+    }
+    
+    private void PauseGame()
+    {
+        Time.timeScale = 0f;
+        isPaused = true;
+    }
+    
+    private void ResumeGameTime()
+    {
+        Time.timeScale = 1f;
+        isPaused = false;
+    }
+    
+    private void PlaySound()
+    {
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.PlaySound(UIManager.Instance.buttonClickSound);
+        }
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\UI\SceneLoader.cs
+================================================================================
+
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+
+public class SceneLoader : MonoBehaviour
+{
+    public static SceneLoader Instance { get; private set; }
+    
+    [Header("Загрузка")]
+    public GameObject loadingScreen;
+    public Slider loadingSlider;
+    public Text loadingText;
+    
+    private void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
+    
+    public void LoadScene(string sceneName)
+    {
+        StartCoroutine(LoadSceneAsync(sceneName));
+    }
+    
+    private System.Collections.IEnumerator LoadSceneAsync(string sceneName)
+    {
+        // Показываем экран загрузки
+        if (loadingScreen != null)
+        {
+            loadingScreen.SetActive(true);
+        }
+        
+        AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName);
+        operation.allowSceneActivation = false;
+        
+        while (!operation.isDone)
+        {
+            float progress = Mathf.Clamp01(operation.progress / 0.9f);
+            
+            // Обновляем UI загрузки
+            if (loadingSlider != null)
+            {
+                loadingSlider.value = progress;
+            }
+            
+            if (loadingText != null)
+            {
+                loadingText.text = $"Загрузка... {progress * 100:F0}%";
+            }
+            
+            if (operation.progress >= 0.9f)
+            {
+                // Ждем немного перед переходом
+                yield return new WaitForSeconds(0.5f);
+                operation.allowSceneActivation = true;
+            }
+            
+            yield return null;
+        }
+        
+        // Скрываем экран загрузки
+        if (loadingScreen != null)
+        {
+            loadingScreen.SetActive(false);
+        }
+    }
+    
+    public void QuitGame()
+    {
+        #if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+        #else
+        Application.Quit();
+        #endif
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\UI\SettingsMenu.cs
+================================================================================
+
+using UnityEngine;
+using UnityEngine.UI;
+
+public class SettingsMenu : MonoBehaviour
+{
+    [Header("Компоненты")]
+    public CanvasGroup settingsPanel;
+    public Slider volumeSlider;
+    public Button backButton;
+    public Toggle fullscreenToggle;
+    
+    private void Start()
+    {
+        InitializeComponents();
+        LoadSettings();
+        Hide(); // Скрываем при старте
+    }
+    
+    private void InitializeComponents()
+    {
+        // Слайдер громкости
+        if (volumeSlider != null)
+        {
+            volumeSlider.onValueChanged.AddListener(OnVolumeChanged);
+        }
+        
+        // Кнопка назад
+        if (backButton != null)
+        {
+            backButton.onClick.RemoveAllListeners();
+            backButton.onClick.AddListener(() =>
+            {
+                PlaySound();
+                Hide();
+            });
+        }
+        
+        // Переключатель полноэкранного режима
+        if (fullscreenToggle != null)
+        {
+            fullscreenToggle.onValueChanged.AddListener(OnFullscreenChanged);
+        }
+    }
+    
+    public void Show()
+    {
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.ShowCanvasGroup(settingsPanel);
+            UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
+        }
+        else if (settingsPanel != null)
+        {
+            settingsPanel.alpha = 1;
+            settingsPanel.interactable = true;
+            settingsPanel.blocksRaycasts = true;
+        }
+        
+        LoadSettings();
+    }
+    
+    public void Hide()
+    {
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.HideCanvasGroup(settingsPanel);
+            UIManager.Instance.PlaySound(UIManager.Instance.menuCloseSound);
+        }
+        else if (settingsPanel != null)
+        {
+            settingsPanel.alpha = 0;
+            settingsPanel.interactable = false;
+            settingsPanel.blocksRaycasts = false;
+        }
+        
+        SaveSettings();
+        
+        // Возвращаемся к предыдущему меню
+        ReturnToPreviousMenu();
+    }
+    
+    private void LoadSettings()
+    {
+        // Громкость
+        if (volumeSlider != null)
+        {
+            float volume = PlayerPrefs.GetFloat("MasterVolume", 1f);
+            volumeSlider.value = volume;
+            ApplyVolume(volume);
+        }
+        
+        // Полноэкранный режим
+        if (fullscreenToggle != null)
+        {
+            bool isFullscreen = PlayerPrefs.GetInt("Fullscreen", 1) == 1;
+            fullscreenToggle.isOn = isFullscreen;
+            Screen.fullScreen = isFullscreen;
+        }
+    }
+    
+    private void SaveSettings()
+    {
+        // Сохраняем громкость
+        if (volumeSlider != null)
+        {
+            PlayerPrefs.SetFloat("MasterVolume", volumeSlider.value);
+        }
+        
+        // Сохраняем настройки полноэкранного режима
+        if (fullscreenToggle != null)
+        {
+            PlayerPrefs.SetInt("Fullscreen", fullscreenToggle.isOn ? 1 : 0);
+        }
+        
+        PlayerPrefs.Save();
+    }
+    
+    private void OnVolumeChanged(float volume)
+    {
+        ApplyVolume(volume);
+    }
+    
+    private void ApplyVolume(float volume)
+    {
+        AudioListener.volume = volume;
+    }
+    
+    private void OnFullscreenChanged(bool isFullscreen)
+    {
+        Screen.fullScreen = isFullscreen;
+    }
+    
+    private void ReturnToPreviousMenu()
+    {
+        // Находим главное меню или меню паузы в сцене
+        MainMenu mainMenu = FindObjectOfType<MainMenu>();
+        PauseMenu pauseMenu = FindObjectOfType<PauseMenu>();
+        
+        if (mainMenu != null)
+        {
+            mainMenu.Show();
+        }
+        else if (pauseMenu != null)
+        {
+            pauseMenu.Show();
+        }
+    }
+    
+    private void PlaySound()
+    {
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.PlaySound(UIManager.Instance.buttonClickSound);
+        }
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\UI\UIManager.cs
+================================================================================
+
+using UnityEngine;
+
+public class UIManager : MonoBehaviour
+{
+    public static UIManager Instance { get; private set; }
+    
+    [Header("Аудио")]
+    public AudioSource uiAudioSource;
+    public AudioClip buttonClickSound;
+    public AudioClip menuOpenSound;
+    public AudioClip menuCloseSound;
+    
+    private void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+            // НЕ используем DontDestroyOnLoad - у каждой сцены свой UIManager
+        }
+    }
+    
+    public void PlaySound(AudioClip clip)
+    {
+        if (uiAudioSource != null && clip != null)
+        {
+            uiAudioSource.PlayOneShot(clip);
+        }
+    }
+    
+    // Общие методы для всех меню
+    public void ShowCanvasGroup(CanvasGroup canvasGroup)
+    {
+        if (canvasGroup != null)
+        {
+            canvasGroup.alpha = 1;
+            canvasGroup.interactable = true;
+            canvasGroup.blocksRaycasts = true;
+        }
+    }
+    
+    public void HideCanvasGroup(CanvasGroup canvasGroup)
+    {
+        if (canvasGroup != null)
+        {
+            canvasGroup.alpha = 0;
+            canvasGroup.interactable = false;
+            canvasGroup.blocksRaycasts = false;
+        }
     }
 }

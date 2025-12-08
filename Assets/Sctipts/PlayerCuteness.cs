@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [RequireComponent(typeof(AudioSource))]
-[RequireComponent(typeof(PlayerController))] // Зависимость, так как мы его отключаем
+[RequireComponent(typeof(PlayerController))]
 public class PlayerCuteness : MonoBehaviour
 {
     [Header("Cuteness Settings")]
@@ -9,12 +9,15 @@ public class PlayerCuteness : MonoBehaviour
     public float startCuteness = 0f;
 
     [Header("Gameplay Balance")]
-    public float passiveCutenessGain = 1f;
+    public float passiveCutenessGain = 1f; // Пассивное накопление милоты со временем
+
+    [Header("UI References")]
+    public HUD hud; // Ссылка на HUD (нужно перетащить в инспекторе)
 
     [Header("Audio")]
-    public AudioClip damageSound;   // Звук, когда милота растет (получаем "урон")
-    public AudioClip restoreSound;  // Звук, когда убиваем врага (восстанавливаем брутальность)
-    public AudioClip gameOverSound; // Звук проигрыша
+    public AudioClip damageSound;   // Звук получения милоты
+    public AudioClip restoreSound;  // Звук восстановления (убийство врага)
+    public AudioClip gameOverSound; // Звук Game Over
 
     public float CurrentCuteness { get; private set; }
 
@@ -24,11 +27,23 @@ public class PlayerCuteness : MonoBehaviour
     void Awake()
     {
         _audioSource = GetComponent<AudioSource>();
+
+        // Если HUD не назначен в инспекторе, пробуем найти его на сцене
+        if (hud == null)
+        {
+            hud = FindObjectOfType<HUD>();
+        }
     }
 
     void Start()
     {
         CurrentCuteness = startCuteness;
+
+        // Инициализируем HUD значениями
+        if (hud != null)
+        {
+            hud.Initialize(maxCuteness, CurrentCuteness);
+        }
     }
 
     void OnEnable()
@@ -44,7 +59,12 @@ public class PlayerCuteness : MonoBehaviour
     void Update()
     {
         if (_isGameOver) return;
-        AddCuteness(passiveCutenessGain * Time.deltaTime, isPassive: true);
+
+        // Пассивное накопление милоты (это усложняет игру со временем)
+        if (passiveCutenessGain > 0)
+        {
+            AddCuteness(passiveCutenessGain * Time.deltaTime, isPassive: true);
+        }
     }
 
     private void OnEnemyKilled(float brutailityRestoreAmount)
@@ -53,14 +73,13 @@ public class PlayerCuteness : MonoBehaviour
 
         RemoveCuteness(brutailityRestoreAmount);
 
-        // Звук восстановления (приятный звук)
         if (restoreSound != null)
         {
             _audioSource.PlayOneShot(restoreSound);
         }
     }
 
-    // Добавил параметр isPassive, чтобы звук не спамил каждую секунду от пассивного прироста
+    // Добавляем милоту (аналог получения урона)
     public void AddCuteness(float amount, bool isPassive = false)
     {
         if (_isGameOver) return;
@@ -68,7 +87,13 @@ public class PlayerCuteness : MonoBehaviour
         CurrentCuteness += amount;
         CurrentCuteness = Mathf.Clamp(CurrentCuteness, 0, maxCuteness);
 
-        // Играем звук "урона" (получения милоты) только если это не пассивное накопление
+        // Обновляем UI
+        if (hud != null)
+        {
+            hud.UpdateCuteness(CurrentCuteness);
+        }
+
+        // Звук играем только если это удар врага, а не пассивный тик
         if (!isPassive && damageSound != null && amount > 0)
         {
             _audioSource.PlayOneShot(damageSound);
@@ -77,12 +102,19 @@ public class PlayerCuteness : MonoBehaviour
         CheckGameOver();
     }
 
+    // Убираем милоту (лечимся, убивая врагов)
     public void RemoveCuteness(float amount)
     {
         if (_isGameOver) return;
 
         CurrentCuteness -= amount;
         CurrentCuteness = Mathf.Clamp(CurrentCuteness, 0, maxCuteness);
+
+        // Обновляем UI
+        if (hud != null)
+        {
+            hud.UpdateCuteness(CurrentCuteness);
+        }
     }
 
     public float GetCutenessNormalized()
@@ -103,7 +135,6 @@ public class PlayerCuteness : MonoBehaviour
         _isGameOver = true;
         Debug.Log("GAME OVER: Вы превратились в зайчика! Слишком мило!");
 
-        // Звук проигрыша
         if (gameOverSound != null)
         {
             _audioSource.PlayOneShot(gameOverSound);
@@ -111,7 +142,7 @@ public class PlayerCuteness : MonoBehaviour
 
         GetComponent<PlayerController>().enabled = false;
 
-        // Совет: Здесь лучше выключить музыку уровня или приглушить её, 
-        // но это требует доступа к музыкальному менеджеру.
+        // Здесь можно вызвать экран проигрыша через UIManager, если он есть
+        // Example: UIManager.Instance.ShowGameOverScreen();
     }
 }
