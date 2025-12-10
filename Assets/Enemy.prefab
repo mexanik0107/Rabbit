@@ -10,12 +10,12 @@ GameObject:
   m_Component:
   - component: {fileID: 2360588488617650154}
   - component: {fileID: 1650758193974353633}
-  - component: {fileID: 7092190655123451715}
   - component: {fileID: 8511757270450819351}
   - component: {fileID: 7049701505496217893}
   - component: {fileID: 2271251535733553330}
   - component: {fileID: 4322585437737239686}
   - component: {fileID: 9176874898433393270}
+  - component: {fileID: 2651614796836089939}
   m_Layer: 0
   m_Name: Enemy
   m_TagString: Untagged
@@ -86,53 +86,17 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
-  m_Sprite: {fileID: -2413806693520163455, guid: a86470a33a6bf42c4b3595704624658b, type: 3}
-  m_Color: {r: 0.5849056, g: 0.5849056, b: 0.5849056, a: 1}
+  m_Sprite: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
   m_Size: {x: 1, y: 1}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
-  m_WasSpriteAssigned: 1
+  m_WasSpriteAssigned: 0
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
---- !u!58 &7092190655123451715
-CircleCollider2D:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1591607187254522008}
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Density: 1
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_ForceSendLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_ForceReceiveLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_ContactCaptureLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_CallbackLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_IsTrigger: 0
-  m_UsedByEffector: 0
-  m_CompositeOperation: 0
-  m_CompositeOrder: 0
-  m_Offset: {x: 0, y: 0}
-  m_Radius: 0.5
 --- !u!50 &8511757270450819351
 Rigidbody2D:
   serializedVersion: 5
@@ -148,7 +112,7 @@ Rigidbody2D:
   m_Mass: 1
   m_LinearDamping: 0
   m_AngularDamping: 0.05
-  m_GravityScale: 1
+  m_GravityScale: 0
   m_Material: {fileID: 0}
   m_IncludeLayers:
     serializedVersion: 2
@@ -174,12 +138,55 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyAI
   player: {fileID: 0}
   findPlayerAutomatically: 1
-  moveSpeed: 3
+  jumpSpeed: 6
+  jumpDuration: 0.6
+  jumpInterval: 1
+  jumpScaleCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.5
+      value: 0.5
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  sizeMultiplier: 0.5
+  animationFps: 10
+  idleSprites:
+  - {fileID: -1153728591817938593, guid: ab95ab958ee783844a650ac22b5ca686, type: 3}
+  jumpSprites:
+  - {fileID: -7831747679687108373, guid: 88111c81b19be4f4f92b0ae1015d737f, type: 3}
   rotationSpeed: 10
   attackRange: 1.5
   attackCooldown: 1
   cutenessDamage: 10
+  sfxGroup: {fileID: 4694438467389381592, guid: 0ddea127dafa66941a101985be077c4e, type: 2}
   attackSound: {fileID: 0}
+  jumpSound: {fileID: 8300000, guid: 2c44040f13d8cd543807fde117fb24ef, type: 3}
 --- !u!114 &2271251535733553330
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -193,6 +200,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemyHealth
   maxHealth: 5
+  sfxGroup: {fileID: 4694438467389381592, guid: 0ddea127dafa66941a101985be077c4e, type: 2}
   hitSound: {fileID: 0}
   deathSound: {fileID: 0}
 --- !u!82 &4322585437737239686
@@ -204,7 +212,7 @@ AudioSource:
   m_GameObject: {fileID: 1591607187254522008}
   m_Enabled: 1
   serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 0}
+  OutputAudioMixerGroup: {fileID: 4694438467389381592, guid: 0ddea127dafa66941a101985be077c4e, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 1
@@ -308,6 +316,43 @@ MonoBehaviour:
   dropChance: 0.3
   minAmmo: 20
   maxAmmo: 45
+--- !u!70 &2651614796836089939
+CapsuleCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1591607187254522008}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ForceSendLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ForceReceiveLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ContactCaptureLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_CallbackLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_IsTrigger: 0
+  m_UsedByEffector: 0
+  m_CompositeOperation: 0
+  m_CompositeOrder: 0
+  m_Offset: {x: 0.004157901, y: -0.034537554}
+  m_Size: {x: 0.84706616, y: 1.5224648}
+  m_Direction: 0
 --- !u!1 &4345561736587732369
 GameObject:
   m_ObjectHideFlags: 0
@@ -333,13 +378,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4345561736587732369}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalRotation: {x: -0, y: -0, z: 0.0023194135, w: -0.9999973}
+  m_LocalPosition: {x: 0.01, y: -0, z: 0}
+  m_LocalScale: {x: 2.5833576, y: 2.6179566, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2360588488617650154}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: -0.266}
 --- !u!212 &7709004159912110419
 SpriteRenderer:
   m_ObjectHideFlags: 0

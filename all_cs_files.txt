@@ -244,21 +244,211 @@ public class CameraFollow : MonoBehaviour
 }
 
 ================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\DynamicMusicManager.cs
+================================================================================
+
+using UnityEngine;
+using System.Collections;
+using UnityEngine.Audio; // ВАЖНО: Добавлено пространство имен для микшера
+
+public class DynamicMusicManager : MonoBehaviour
+{
+    [Header("Audio Mixing")]
+    // Сюда перетащи группу "Music" из твоего Audio Mixer
+    public AudioMixerGroup musicOutputGroup;
+
+    [Header("Target")]
+    public PlayerCuteness playerCuteness;
+
+    [Header("Thresholds (Hysteresis)")]
+    [Tooltip("Если милота ВЫШЕ этого числа -> включаем Милую музыку")]
+    public float switchToCuteThreshold = 60f;
+
+    [Tooltip("Если милота НИЖЕ этого числа -> включаем Грубую музыку")]
+    public float switchToRoughThreshold = 40f;
+
+    [Header("Transition")]
+    [Tooltip("Скорость плавного перехода (сек)")]
+    public float fadeDuration = 2.0f;
+    [Range(0f, 1f)] public float maxVolume = 0.5f;
+
+    [Header("Music Library")]
+    public AudioClip[] roughTracks; // Грубая музыка (для низкой милоты)
+    public AudioClip[] cuteTracks;  // Милая музыка (для высокой милоты)
+
+    // Два источника звука для кроссфейда (плавного перетекания)
+    private AudioSource _sourceRough;
+    private AudioSource _sourceCute;
+
+    // Текущее состояние: true = играет милая, false = играет грубая
+    private bool _isPlayingCute;
+
+    // Чтобы не запускать корутину перехода много раз подряд
+    private Coroutine _fadeCoroutine;
+
+    void Start()
+    {
+        // 1. Если игрока не назначили вручную, ищем на сцене
+        if (playerCuteness == null)
+            playerCuteness = FindObjectOfType<PlayerCuteness>();
+
+        // 2. Создаем два AudioSource программно
+        _sourceRough = CreateSource("AudioSource_Rough");
+        _sourceCute = CreateSource("AudioSource_Cute");
+
+        // 3. Определяем начальное состояние
+        if (playerCuteness != null)
+        {
+            float currentVal = playerCuteness.CurrentCuteness;
+            _isPlayingCute = currentVal > switchToCuteThreshold;
+        }
+        else
+        {
+            _isPlayingCute = false;
+        }
+
+        // 4. Запускаем треки
+        PlayRandomTrack(_sourceRough, roughTracks);
+        PlayRandomTrack(_sourceCute, cuteTracks);
+
+        // 5. Устанавливаем начальную громкость
+        if (_isPlayingCute)
+        {
+            _sourceCute.volume = maxVolume;
+            _sourceRough.volume = 0f;
+        }
+        else
+        {
+            _sourceCute.volume = 0f;
+            _sourceRough.volume = maxVolume;
+        }
+    }
+
+    void Update()
+    {
+        if (playerCuteness == null) return;
+
+        float currentCuteness = playerCuteness.CurrentCuteness;
+
+        // --- ЛОГИКА ГИСТЕРЕЗИСА ---
+        if (!_isPlayingCute && currentCuteness > switchToCuteThreshold)
+        {
+            SwitchToCute();
+        }
+        else if (_isPlayingCute && currentCuteness < switchToRoughThreshold)
+        {
+            SwitchToRough();
+        }
+
+        CheckAndLoop(_sourceRough, roughTracks);
+        CheckAndLoop(_sourceCute, cuteTracks);
+    }
+
+    private void SwitchToCute()
+    {
+        _isPlayingCute = true;
+        if (_fadeCoroutine != null) StopCoroutine(_fadeCoroutine);
+        _fadeCoroutine = StartCoroutine(Crossfade(_sourceCute, _sourceRough));
+    }
+
+    private void SwitchToRough()
+    {
+        _isPlayingCute = false;
+        if (_fadeCoroutine != null) StopCoroutine(_fadeCoroutine);
+        _fadeCoroutine = StartCoroutine(Crossfade(_sourceRough, _sourceCute));
+    }
+
+    private IEnumerator Crossfade(AudioSource toOn, AudioSource toOff)
+    {
+        float timer = 0f;
+        float startVolOn = toOn.volume;
+        float startVolOff = toOff.volume;
+
+        while (timer < fadeDuration)
+        {
+            timer += Time.deltaTime;
+            float t = timer / fadeDuration;
+
+            toOn.volume = Mathf.Lerp(startVolOn, maxVolume, t);
+            toOff.volume = Mathf.Lerp(startVolOff, 0f, t);
+
+            yield return null;
+        }
+
+        toOn.volume = maxVolume;
+        toOff.volume = 0f;
+    }
+
+    // Создание AudioSource "на лету"
+    private AudioSource CreateSource(string goName)
+    {
+        GameObject go = new GameObject(goName);
+        go.transform.SetParent(this.transform);
+        AudioSource src = go.AddComponent<AudioSource>();
+
+        // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+        // Назначаем Output группу микшера, если она задана в инспекторе
+        if (musicOutputGroup != null)
+        {
+            src.outputAudioMixerGroup = musicOutputGroup;
+        }
+        // -------------------------
+
+        src.loop = false;
+        src.playOnAwake = false;
+        return src;
+    }
+
+    private void PlayRandomTrack(AudioSource source, AudioClip[] clips)
+    {
+        if (clips.Length == 0) return;
+        AudioClip clip = clips[Random.Range(0, clips.Length)];
+        source.clip = clip;
+        source.Play();
+    }
+
+    private void CheckAndLoop(AudioSource source, AudioClip[] clips)
+    {
+        if (!source.isPlaying && Time.timeScale > 0)
+        {
+            PlayRandomTrack(source, clips);
+        }
+    }
+}
+
+================================================================================
 ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\EnemyAI.cs
 ================================================================================
 
 using UnityEngine;
-
+using System.Collections;
+using Mono.Cecil.Cil;
 [RequireComponent(typeof(Rigidbody2D))]
-[RequireComponent(typeof(AudioSource))] // Врагу тоже нужен источник звука
+[RequireComponent(typeof(AudioSource))]
+[RequireComponent(typeof(SpriteRenderer))]
 public class EnemyAI : MonoBehaviour
 {
     [Header("Targeting")]
     public Transform player;
     public bool findPlayerAutomatically = true;
+    [Header("Jump Movement Settings")]
+    public float jumpSpeed = 6f;
+    public float jumpDuration = 0.6f;
+    public float jumpInterval = 1f;
+    public AnimationCurve jumpScaleCurve = new AnimationCurve(new Keyframe(0, 0), new Keyframe(0.5f, 0.5f), new Keyframe(1, 0));
+
+    [Header("Visuals & Animation")]
+    [Tooltip("Общий множитель размера кролика. 1 = как при импорте, 0.5 = половина.")]
+    [Range(0.1f, 3f)]
+    public float sizeMultiplier = 1.0f;
+
+    [Tooltip("Скорость анимации (кадров в секунду)")]
+    public float animationFps = 10f;
+
+    public Sprite[] idleSprites;
+    public Sprite[] jumpSprites;
 
     [Header("Movement Stats")]
-    public float moveSpeed = 3f;
     public float rotationSpeed = 10f;
 
     [Header("Combat Stats")]
@@ -267,17 +457,27 @@ public class EnemyAI : MonoBehaviour
     public float cutenessDamage = 10f;
 
     [Header("Audio")]
-    public AudioClip attackSound; // Звук "кусь" или удара
+    public AudioClip attackSound;
+    public AudioClip jumpSound;
 
     private Rigidbody2D _rb;
     private AudioSource _audioSource;
+    private SpriteRenderer _spriteRenderer;
+
     private float _lastAttackTime;
-    private Vector2 _movementVector;
+
+    // Храним размер, который был у объекта в редакторе (Scale 1,1,1 или другой)
+    private Vector3 _baseEditorScale;
+    private bool _isJumping = false;
 
     void Awake()
     {
         _rb = GetComponent<Rigidbody2D>();
         _audioSource = GetComponent<AudioSource>();
+        _spriteRenderer = GetComponent<SpriteRenderer>();
+
+        // Запоминаем исходный Scale при старте (обычно это 1,1,1)
+        _baseEditorScale = transform.localScale;
     }
 
     void Start()
@@ -290,64 +490,69 @@ public class EnemyAI : MonoBehaviour
                 player = playerObj.transform;
             }
         }
+
+        StartCoroutine(RabbitBehaviorRoutine());
+        StartCoroutine(AnimationRoutine());
     }
 
     void Update()
+    {
+        HandleAttackLogic();
+    }
+
+    // --- Логика Анимации Спрайтов ---
+
+    private IEnumerator AnimationRoutine()
+    {
+        int frameIndex = 0;
+        float timer = 0f;
+
+        while (true)
+        {
+            Sprite[] currentClips = _isJumping ? jumpSprites : idleSprites;
+
+            if (currentClips != null && currentClips.Length > 0)
+            {
+                float frameDuration = 1f / animationFps;
+                timer += Time.deltaTime;
+
+                if (timer >= frameDuration)
+                {
+                    timer = 0f;
+                    frameIndex++;
+
+                    if (frameIndex >= currentClips.Length)
+                        frameIndex = 0;
+
+                    _spriteRenderer.sprite = currentClips[frameIndex];
+                }
+            }
+            yield return null;
+        }
+    }
+
+    // --- Логика Атаки ---
+
+    private void HandleAttackLogic()
     {
         if (player == null) return;
 
         float distanceToPlayer = Vector2.Distance(transform.position, player.position);
 
-        if (distanceToPlayer > attackRange)
+        if (distanceToPlayer <= attackRange)
         {
-            CalculateMovement();
-        }
-        else
-        {
-            StopMovement();
             if (Time.time >= _lastAttackTime + attackCooldown)
             {
                 PerformAttack();
             }
         }
-
-        RotateTowardsPlayer();
-    }
-
-    void FixedUpdate()
-    {
-        MoveEnemy();
-    }
-
-    private void CalculateMovement()
-    {
-        Vector2 direction = (player.position - transform.position).normalized;
-        _movementVector = direction;
-    }
-
-    private void StopMovement()
-    {
-        _movementVector = Vector2.zero;
-    }
-
-    private void RotateTowardsPlayer()
-    {
-        if (player == null) return;
-        Vector2 direction = player.position - transform.position;
-        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
-        Quaternion targetRotation = Quaternion.Euler(0, 0, angle);
-        transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
     }
 
     private void PerformAttack()
     {
         _lastAttackTime = Time.time;
 
-        // Воспроизводим звук атаки
-        if (attackSound != null && _audioSource != null)
-        {
-            _audioSource.PlayOneShot(attackSound);
-        }
+        if (attackSound != null) _audioSource.PlayOneShot(attackSound);
 
         if (player != null)
         {
@@ -355,14 +560,91 @@ public class EnemyAI : MonoBehaviour
             if (playerCuteness != null)
             {
                 playerCuteness.AddCuteness(cutenessDamage);
-                Debug.Log($"{name} добавил игроку милоты!");
+                Debug.Log($"{name} сделал кусь!");
             }
         }
     }
 
-    private void MoveEnemy()
+    // --- Логика Движения и Масштаба ---
+
+    private IEnumerator RabbitBehaviorRoutine()
     {
-        _rb.MovePosition(_rb.position + _movementVector * moveSpeed * Time.fixedDeltaTime);
+        yield return new WaitForSeconds(Random.Range(0f, 1f));
+
+        while (true)
+        {
+            // 1. IDLE (Стоим)
+            _isJumping = false;
+
+            float timer = 0f;
+            while (timer < jumpInterval)
+            {
+                RotateTowardsPlayer();
+
+                // В фазе покоя принудительно устанавливаем размер
+                // Это позволяет менять sizeMultiplier в инспекторе и сразу видеть результат
+                transform.localScale = GetCurrentTargetSize();
+
+                timer += Time.deltaTime;
+                yield return null;
+            }
+
+            // 2. JUMP (Прыгаем)
+            if (player != null)
+            {
+                yield return StartCoroutine(PerformJump());
+            }
+        }
+    }
+
+    private IEnumerator PerformJump()
+    {
+        _isJumping = true;
+
+        Vector2 jumpDirection = (player.position - transform.position).normalized;
+
+        if (jumpSound != null) _audioSource.PlayOneShot(jumpSound);
+
+        float timeElapsed = 0f;
+
+        // Фиксируем базовый размер перед прыжком, чтобы он не скакал, если мы крутим настройки
+        Vector3 startJumpSize = GetCurrentTargetSize();
+
+        while (timeElapsed < jumpDuration)
+        {
+            timeElapsed += Time.deltaTime;
+            float t = timeElapsed / jumpDuration;
+
+            // Движение
+            _rb.MovePosition(_rb.position + jumpDirection * jumpSpeed * Time.fixedDeltaTime);
+
+            // Эффект масштаба: Базовый Размер * (1 + ЗначениеКривой)
+            // Если кривая дает 0.5, то размер будет 1.5 от базового
+            float curveValue = jumpScaleCurve.Evaluate(t);
+            transform.localScale = startJumpSize * (1f + curveValue);
+
+            yield return new WaitForFixedUpdate();
+        }
+
+        // Возвращаем точный размер в конце
+        transform.localScale = GetCurrentTargetSize();
+        _isJumping = false;
+    }
+
+    private void RotateTowardsPlayer()
+    {
+        if (player == null) return;
+
+        Vector2 direction = player.position - transform.position;
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
+        Quaternion targetRotation = Quaternion.Euler(0, 0, angle);
+        transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+    }
+
+    // Вспомогательный метод для расчета текущего базового размера
+    private Vector3 GetCurrentTargetSize()
+    {
+        return _baseEditorScale * sizeMultiplier;
     }
 
     void OnDrawGizmosSelected()
@@ -481,6 +763,83 @@ public class LootDropper : MonoBehaviour
                 pickupScript.ammoAmount = amount;
             }
         }
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\MainMenuMusic.cs
+================================================================================
+
+using UnityEngine;
+using UnityEngine.Audio; // Нужно для работы с микшером
+
+[RequireComponent(typeof(AudioSource))]
+public class MainMenuMusic : MonoBehaviour
+{
+    [Header("Settings")]
+    [Tooltip("Список треков для случайного воспроизведения")]
+    public AudioClip[] playlist;
+
+    [Header("Audio Mixing")]
+    [Tooltip("Перетащи сюда группу 'Music' из Audio Mixer")]
+    public AudioMixerGroup musicOutputGroup;
+
+    private AudioSource _audioSource;
+    private int _lastTrackIndex = -1;
+
+    void Awake()
+    {
+        _audioSource = GetComponent<AudioSource>();
+
+        // Сразу настраиваем AudioSource
+        _audioSource.playOnAwake = false;
+        _audioSource.loop = false; // Мы будем менять треки сами, поэтому авто-повтор выключаем
+
+        // Автоматически назначаем группу микшера, если она указана в инспекторе
+        if (musicOutputGroup != null)
+        {
+            _audioSource.outputAudioMixerGroup = musicOutputGroup;
+        }
+    }
+
+    void Start()
+    {
+        PlayRandomTrack();
+    }
+
+    void Update()
+    {
+        // Если музыка закончилась (и игра не на паузе), включаем следующую
+        if (!_audioSource.isPlaying)
+        {
+            PlayRandomTrack();
+        }
+    }
+
+    private void PlayRandomTrack()
+    {
+        if (playlist == null || playlist.Length == 0) return;
+
+        int newIndex;
+
+        // Если у нас больше 1 трека, стараемся не играть один и тот же два раза подряд
+        if (playlist.Length > 1)
+        {
+            do
+            {
+                newIndex = Random.Range(0, playlist.Length);
+            }
+            while (newIndex == _lastTrackIndex);
+        }
+        else
+        {
+            newIndex = 0;
+        }
+
+        _lastTrackIndex = newIndex;
+
+        _audioSource.clip = playlist[newIndex];
+        _audioSource.Play();
     }
 }
 
@@ -623,181 +982,131 @@ public class PlayerController : MonoBehaviour
 using UnityEngine;
 
 [RequireComponent(typeof(AudioSource))]
-[RequireComponent(typeof(PlayerController))] // Зависимость, так как мы его отключаем
 public class PlayerCuteness : MonoBehaviour
 {
-    [Header("Cuteness Settings")]
+    [Header("Settings")]
     public float maxCuteness = 100f;
     public float startCuteness = 0f;
 
-    [Header("Gameplay Balance")]
-    public float passiveCutenessGain = 1f;
+    [Header("Combat Balance")]
+    [Tooltip("На сколько процентов (от максимума) снижается милота при убийстве врага")]
+    [Range(0f, 100f)]
+    public float killReductionPercent = 10f; // Например, 10% за врага
+
+    [Header("References")]
+    public HUD hud;
 
     [Header("Audio")]
-    public AudioClip damageSound;   // Звук, когда милота растет (получаем "урон")
-    public AudioClip restoreSound;  // Звук, когда убиваем врага (восстанавливаем брутальность)
-    public AudioClip gameOverSound; // Звук проигрыша
+    public AudioClip hitSound;
+    public AudioClip healSound; // Звук снижения милоты (облегчения)
+    public AudioClip gameOverSound;
 
-    public float CurrentCuteness { get; private set; }
-
-    private bool _isGameOver = false;
+    private float _currentCuteness;
     private AudioSource _audioSource;
+    private bool _isDead = false;
+
+    // Публичное свойство для музыкального менеджера
+    public float CurrentCuteness => _currentCuteness;
 
     void Awake()
     {
         _audioSource = GetComponent<AudioSource>();
+        if (hud == null) hud = FindObjectOfType<HUD>();
     }
 
-    void Start()
-    {
-        CurrentCuteness = startCuteness;
-    }
+    // --- ПОДПИСКА НА СОБЫТИЯ ---
+    // Мы слушаем "радиоэфир" игры. Если где-то крикнули "Враг умер", мы реагируем.
 
     void OnEnable()
     {
-        EnemyHealth.OnEnemyDied += OnEnemyKilled;
+        EnemyHealth.OnEnemyDied += HandleEnemyDeath;
     }
 
     void OnDisable()
     {
-        EnemyHealth.OnEnemyDied -= OnEnemyKilled;
+        EnemyHealth.OnEnemyDied -= HandleEnemyDeath;
+    }
+    // ---------------------------
+
+    void Start()
+    {
+        _currentCuteness = startCuteness;
+        if (hud != null) hud.Initialize(maxCuteness, _currentCuteness);
     }
 
     void Update()
     {
-        if (_isGameOver) return;
-        AddCuteness(passiveCutenessGain * Time.deltaTime, isPassive: true);
+        // УДАЛЕНО: Пассивное накопление (AddCuteness(passiveGain...))
+        // Теперь милота сама по себе НЕ растет.
     }
 
-    private void OnEnemyKilled(float brutailityRestoreAmount)
+    // Этот метод вызывается автоматически, когда умирает любой враг
+    private void HandleEnemyDeath(float points)
     {
-        if (_isGameOver) return;
+        if (_isDead) return;
 
-        RemoveCuteness(brutailityRestoreAmount);
+        // Считаем процент от МАКСИМУМА. 
+        // Если maxCuteness = 100, а killReductionPercent = 10, то снимаем 10 ед.
+        float reductionAmount = maxCuteness * (killReductionPercent / 100f);
 
-        // Звук восстановления (приятный звук)
-        if (restoreSound != null)
-        {
-            _audioSource.PlayOneShot(restoreSound);
-        }
+        RemoveCuteness(reductionAmount);
     }
 
-    // Добавил параметр isPassive, чтобы звук не спамил каждую секунду от пассивного прироста
-    public void AddCuteness(float amount, bool isPassive = false)
+    public void AddCuteness(float amount, bool playSound = true)
     {
-        if (_isGameOver) return;
+        if (_isDead) return;
 
-        CurrentCuteness += amount;
-        CurrentCuteness = Mathf.Clamp(CurrentCuteness, 0, maxCuteness);
+        _currentCuteness += amount;
 
-        // Играем звук "урона" (получения милоты) только если это не пассивное накопление
-        if (!isPassive && damageSound != null && amount > 0)
-        {
-            _audioSource.PlayOneShot(damageSound);
-        }
+        if (playSound && amount > 1f && hitSound != null)
+            _audioSource.PlayOneShot(hitSound);
 
-        CheckGameOver();
-    }
+        UpdateHUD();
 
-    public void RemoveCuteness(float amount)
-    {
-        if (_isGameOver) return;
-
-        CurrentCuteness -= amount;
-        CurrentCuteness = Mathf.Clamp(CurrentCuteness, 0, maxCuteness);
-    }
-
-    public float GetCutenessNormalized()
-    {
-        return CurrentCuteness / maxCuteness;
-    }
-
-    private void CheckGameOver()
-    {
-        if (CurrentCuteness >= maxCuteness)
-        {
-            TriggerGameOver();
-        }
-    }
-
-    private void TriggerGameOver()
-    {
-        _isGameOver = true;
-        Debug.Log("GAME OVER: Вы превратились в зайчика! Слишком мило!");
-
-        // Звук проигрыша
-        if (gameOverSound != null)
-        {
-            _audioSource.PlayOneShot(gameOverSound);
-        }
-
-        GetComponent<PlayerController>().enabled = false;
-
-        // Совет: Здесь лучше выключить музыку уровня или приглушить её, 
-        // но это требует доступа к музыкальному менеджеру.
-    }
-}
-
-================================================================================
-ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\PlayerHealth.cs
-================================================================================
-
-using UnityEngine;
-
-public class PlayerHealth : MonoBehaviour
-{
-    [Header("Настройки здоровья")]
-    public float maxHealth = 100f;
-    public float currentHealth;
-    
-    [Header("Ссылки")]
-    public HUD hud;
-    
-    private void Start()
-    {
-        currentHealth = maxHealth;
-        
-        // Инициализируем HUD если он есть
-        if (hud != null)
-        {
-            hud.Initialize(maxHealth);
-            hud.UpdateHealth(currentHealth);
-        }
-    }
-    
-    public void TakeDamage(float damage)
-    {
-        currentHealth -= damage;
-        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
-        
-        // Обновляем HUD
-        if (hud != null)
-        {
-            hud.UpdateHealth(currentHealth);
-        }
-        
-        // Проверяем смерть
-        if (currentHealth <= 0)
+        if (_currentCuteness >= maxCuteness)
         {
             Die();
         }
     }
-    
-    public void Heal(float amount)
+
+    public void RemoveCuteness(float amount)
     {
-        currentHealth += amount;
-        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
-        
-        if (hud != null)
-        {
-            hud.UpdateHealth(currentHealth);
-        }
+        if (_isDead) return;
+
+        // Если милота была 0, и мы пытаемся снять еще, звук играть не надо
+        bool wasAlreadySafe = _currentCuteness <= 0.01f;
+
+        _currentCuteness -= amount;
+        if (_currentCuteness < 0) _currentCuteness = 0;
+
+        // Играем звук "исцеления" (снижения милоты), только если реально что-то снизилось
+        if (!wasAlreadySafe && amount > 0 && healSound != null)
+            _audioSource.PlayOneShot(healSound);
+
+        UpdateHUD();
     }
-    
+
+    private void UpdateHUD()
+    {
+        if (hud != null) hud.UpdateCuteness(_currentCuteness);
+    }
+
     private void Die()
     {
-        Debug.Log("Игрок умер!");
-        // Здесь можно вызвать Game Over меню или перезапуск уровня
+        _isDead = true;
+        Debug.Log("Game Over: Too Cute!");
+
+        if (gameOverSound != null)
+            AudioSource.PlayClipAtPoint(gameOverSound, transform.position);
+
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.GameOver();
+        }
+        else
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        }
     }
 }
 
@@ -807,13 +1116,14 @@ public class PlayerHealth : MonoBehaviour
 
 using UnityEngine;
 using UnityEngine.InputSystem;
-using System.Collections; // Нужно для работы Coroutines (IEnumerator)
+using System.Collections;
 
 public class PlayerShooting : MonoBehaviour
 {
     [Header("References")]
     public GameObject bulletPrefab;
     public Transform firePoint;
+    public HUD hud; // Ссылка на HUD
 
     [Header("Weapon Stats")]
     public float damage = 2f;
@@ -822,51 +1132,52 @@ public class PlayerShooting : MonoBehaviour
     public float spreadAngle = 5f;
 
     [Header("Ammo Settings")]
-    public int maxMagazineSize = 10;   // Емкость магазина
-    public int maxTotalAmmo = 60;      // Максимум патронов в запасе
-    public int startTotalAmmo = 30;    // Стартовый запас
-    public float reloadTime = 1.5f;    // Время перезарядки в секундах
+    public int maxMagazineSize = 10;
+    public int maxTotalAmmo = 60;
+    public int startTotalAmmo = 30;
+    public float reloadTime = 1.5f;
 
     [Header("Audio")]
     public AudioClip shootSound;
-    public AudioClip reloadSound;      // Звук начала перезарядки
-    public AudioClip emptyClickSound;  // Звук, когда совсем нет патронов
+    public AudioClip reloadSound;
+    public AudioClip emptyClickSound;
     private AudioSource _audioSource;
 
-    // Публичные свойства для UI
     public int CurrentClip { get; private set; }
     public int CurrentTotalAmmo { get; private set; }
-    public bool IsReloading { get; private set; } // Чтобы UI мог показать полоску перезарядки
+    public bool IsReloading { get; private set; }
 
     private float _nextFireTime = 0f;
 
     void Awake()
     {
         _audioSource = GetComponent<AudioSource>();
-        if (_audioSource == null)
-            _audioSource = gameObject.AddComponent<AudioSource>();
+        if (_audioSource == null) _audioSource = gameObject.AddComponent<AudioSource>();
+
+        // Если HUD не назначен в инспекторе, ищем его сами
+        if (hud == null) hud = FindObjectOfType<HUD>();
     }
 
     void Start()
     {
         CurrentClip = maxMagazineSize;
         CurrentTotalAmmo = startTotalAmmo;
-        UpdateAmmoDebug();
+
+        UpdateAmmoUI(); // Обновляем текст при старте
     }
 
     void Update()
     {
-        // Если мы уже перезаряжаемся, блокируем любое управление оружием
         if (IsReloading) return;
 
-        // --- Ручная Перезарядка (Кнопка R) ---
+        // Перезарядка (R)
         if (Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
         {
             StartReload();
             return;
         }
 
-        // --- Стрельба (ЛКМ) ---
+        // Стрельба (ЛКМ)
         if (Mouse.current != null && Mouse.current.leftButton.isPressed)
         {
             if (Time.time >= _nextFireTime)
@@ -879,23 +1190,13 @@ public class PlayerShooting : MonoBehaviour
 
     private void TryShoot()
     {
-        // 1. Если магазин пуст
         if (CurrentClip <= 0)
         {
-            // Автоматическая перезарядка, если есть патроны в запасе
-            if (CurrentTotalAmmo > 0)
-            {
-                StartReload();
-            }
-            else
-            {
-                // Если и в запасе пусто — просто щелкаем
-                PlaySound(emptyClickSound);
-            }
+            if (CurrentTotalAmmo > 0) StartReload();
+            else PlaySound(emptyClickSound);
             return;
         }
 
-        // 2. Если патроны есть — стреляем
         Shoot();
     }
 
@@ -903,7 +1204,6 @@ public class PlayerShooting : MonoBehaviour
     {
         if (bulletPrefab == null || firePoint == null) return;
 
-        // Расчет разброса
         float randomSpread = Random.Range(-spreadAngle, spreadAngle);
         Quaternion spreadRotation = Quaternion.Euler(0, 0, randomSpread);
         Quaternion finalRotation = firePoint.rotation * spreadRotation;
@@ -918,36 +1218,28 @@ public class PlayerShooting : MonoBehaviour
         }
 
         CurrentClip--;
+        UpdateAmmoUI(); // Обновляем UI после выстрела
 
         PlaySound(shootSound, randomizePitch: true);
-
-        // Лог для отладки
-        if (CurrentClip == 0) Debug.Log("Магазин пуст!");
     }
 
-    // Публичный метод, чтобы можно было вызвать перезарядку извне (если понадобится)
     public void StartReload()
     {
-        // Проверки перед стартом:
-        if (IsReloading) return; // Уже в процессе
-        if (CurrentClip == maxMagazineSize) return; // Магазин полон
-        if (CurrentTotalAmmo <= 0) return; // Нечем заряжать
+        if (IsReloading) return;
+        if (CurrentClip == maxMagazineSize) return;
+        if (CurrentTotalAmmo <= 0) return;
 
-        // Запускаем корутину (процесс, растянутый во времени)
         StartCoroutine(ReloadRoutine());
     }
 
     private IEnumerator ReloadRoutine()
     {
         IsReloading = true;
-        Debug.Log("Перезарядка...");
 
+        // Тут можно вывести на экран текст "Reloading...", если нужно
         PlaySound(reloadSound);
 
-        // Ждем указанное время (reloadTime)
         yield return new WaitForSeconds(reloadTime);
-
-        // --- Логика пополнения после ожидания ---
 
         int ammoNeeded = maxMagazineSize - CurrentClip;
         int ammoToReload = Mathf.Min(ammoNeeded, CurrentTotalAmmo);
@@ -956,8 +1248,7 @@ public class PlayerShooting : MonoBehaviour
         CurrentTotalAmmo -= ammoToReload;
 
         IsReloading = false;
-        Debug.Log("Перезарядка завершена!");
-        UpdateAmmoDebug();
+        UpdateAmmoUI(); // Обновляем UI после перезарядки
     }
 
     public void AddAmmo(int amount)
@@ -967,18 +1258,21 @@ public class PlayerShooting : MonoBehaviour
         {
             CurrentTotalAmmo = maxTotalAmmo;
         }
-        Debug.Log($"Подобраны патроны: +{amount}. Всего: {CurrentTotalAmmo}");
 
-        // Опционально: если магазин был пуст и мы подобрали патроны, можно автоматически начать перезарядку
+        UpdateAmmoUI(); // Обновляем UI при подборе
+
         if (CurrentClip == 0)
         {
             StartReload();
         }
     }
 
-    private void UpdateAmmoDebug()
+    private void UpdateAmmoUI()
     {
-        Debug.Log($"Ammo: {CurrentClip} / {CurrentTotalAmmo}");
+        if (hud != null)
+        {
+            hud.UpdateAmmo(CurrentClip, CurrentTotalAmmo);
+        }
     }
 
     private void PlaySound(AudioClip clip, bool randomizePitch = false)
@@ -1047,54 +1341,45 @@ public class Projectile : MonoBehaviour
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq; // Нужен для удобной работы со списками
+using System.Linq;
 
 public class WaveManager : MonoBehaviour
 {
     [Header("Spawn Settings")]
-    [Tooltip("Все точки на карте, где могут появляться враги")]
     public List<Transform> allSpawnPoints;
-
-    [Tooltip("Сколько спавнеров использовать одновременно в одной волне? (0 = все сразу)")]
     public int activeSpawnersCount = 3;
     public bool randomizeSpawnersEveryWave = true;
 
     [Header("Wave Progression")]
-    [Tooltip("Множитель количества врагов для каждой следующей волны (например, 1.2 = +20%)")]
     public float countMultiplier = 1.2f;
-    [Tooltip("Время отдыха между волнами (сек)")]
     public float timeBetweenWaves = 5f;
-    [Tooltip("Задержка между появлением врагов внутри волны (сек)")]
     public float spawnRate = 1f;
 
     [Header("Enemies Configuration")]
     public List<EnemyWaveConfig> enemyConfigs;
 
-    // Состояние системы
     private int _currentWaveIndex = 0;
     private int _enemiesAlive = 0;
     private bool _isSpawning = false;
     private bool _waitingForNextWave = false;
-
-    // Список активных точек для текущей волны
     private List<Transform> _currentWaveSpawners;
+    private HUD _hud;
 
     void Start()
     {
+        _hud = FindObjectOfType<HUD>();
+
         if (allSpawnPoints == null || allSpawnPoints.Count == 0)
         {
-            Debug.LogError("WaveManager: Не назначены точки спавна (Spawn Points)!");
             enabled = false;
             return;
         }
 
-        // Запускаем первую волну
         StartCoroutine(StartNextWave());
     }
 
     void OnEnable()
     {
-        // Подписываемся на событие смерти из твоего EnemyHealth
         EnemyHealth.OnEnemyDied += OnEnemyKilled;
     }
 
@@ -1105,103 +1390,103 @@ public class WaveManager : MonoBehaviour
 
     private void OnEnemyKilled(float unusedFloat)
     {
-        // Уменьшаем счетчик живых врагов
-        if (_enemiesAlive > 0)
-        {
-            _enemiesAlive--;
-        }
+        if (_enemiesAlive > 0) _enemiesAlive--;
 
-        // Если враги кончились и мы не спавним прямо сейчас -> готовим следующую волну
         if (_enemiesAlive <= 0 && !_isSpawning && !_waitingForNextWave)
         {
-            StartCoroutine(StartNextWave());
+            EndWave();
         }
+    }
+
+    private void EndWave()
+    {
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.OnWaveCompleted(_currentWaveIndex);
+        }
+        StartCoroutine(StartNextWave());
     }
 
     private IEnumerator StartNextWave()
     {
         _waitingForNextWave = true;
-        _currentWaveIndex++;
 
-        Debug.Log($"--- ВОЛНА {_currentWaveIndex} НАЧНЕТСЯ ЧЕРЕЗ {timeBetweenWaves} СЕК ---");
+        // --- НОВАЯ ЛОГИКА ТАЙМЕРА ОБРАТНОГО ОТСЧЕТА ---
+        float timer = timeBetweenWaves;
 
-        // Ждем перерыва перед волной
-        yield return new WaitForSeconds(timeBetweenWaves);
+        while (timer > 0)
+        {
+            // Обновляем текст в HUD (например: "NEXT WAVE: 3...")
+            if (_hud != null)
+            {
+                _hud.UpdateWaveText($"NEXT: {Mathf.CeilToInt(timer)}");
+            }
+
+            timer -= Time.deltaTime;
+            yield return null; // Ждем следующий кадр
+        }
+        // -----------------------------------------------
 
         _waitingForNextWave = false;
+        _currentWaveIndex++;
+
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.OnWaveStarted(_currentWaveIndex);
+        }
+
+        // Возвращаем нормальный текст волны
+        if (_hud != null)
+        {
+            _hud.UpdateWaveText($"WAVE {_currentWaveIndex}");
+        }
+
         StartCoroutine(SpawnWaveRoutine());
     }
 
     private IEnumerator SpawnWaveRoutine()
     {
         _isSpawning = true;
-
-        // 1. Выбираем спавнеры для этой волны
         SelectActiveSpawners();
-
-        // 2. Генерируем список всех врагов на эту волну (очередь спавна)
         List<GameObject> spawnQueue = GenerateSpawnQueue();
-
-        // Устанавливаем количество живых врагов, которых игроку нужно победить
         _enemiesAlive = spawnQueue.Count;
 
-        Debug.Log($"Волна {_currentWaveIndex}: Врагов {_enemiesAlive}. Активных точек: {_currentWaveSpawners.Count}");
-
-        // 3. Спавним врагов из очереди
         foreach (GameObject enemyPrefab in spawnQueue)
         {
-            // Выбираем случайную точку из АКТИВНЫХ спавнеров
             Transform spawnPoint = GetRandomActiveSpawner();
-
             if (spawnPoint != null)
             {
                 Instantiate(enemyPrefab, spawnPoint.position, Quaternion.identity);
             }
-
-            // Ждем перед следующим спавном
             yield return new WaitForSeconds(spawnRate);
         }
 
         _isSpawning = false;
     }
 
-    // Логика выбора спавнеров
     private void SelectActiveSpawners()
     {
-        // Если настроено использовать все или число больше чем есть точек -> берем все
         if (!randomizeSpawnersEveryWave || activeSpawnersCount <= 0 || activeSpawnersCount >= allSpawnPoints.Count)
         {
             _currentWaveSpawners = new List<Transform>(allSpawnPoints);
         }
         else
         {
-            // Перемешиваем список всех точек и берем первые N штук
-            // Используем System.Random или Unity Random для перемешивания
             _currentWaveSpawners = allSpawnPoints.OrderBy(x => Random.value).Take(activeSpawnersCount).ToList();
         }
     }
 
-    // Генерация списка врагов с учетом автолевелинга
     private List<GameObject> GenerateSpawnQueue()
     {
         List<GameObject> queue = new List<GameObject>();
-
-        // Рассчитываем текущий множитель: Multiplier ^ (Wave - 1)
-        // Пример: 1.2 ^ 0 = 1; 1.2 ^ 1 = 1.2; 1.2 ^ 2 = 1.44...
         float currentMultiplier = Mathf.Pow(countMultiplier, _currentWaveIndex - 1);
 
         foreach (var config in enemyConfigs)
         {
-            // Базовое кол-во * множитель
             int countToSpawn = Mathf.RoundToInt(config.baseCount * currentMultiplier);
-
-            for (int i = 0; i < countToSpawn; i++)
-            {
-                queue.Add(config.enemyPrefab);
-            }
+            for (int i = 0; i < countToSpawn; i++) queue.Add(config.enemyPrefab);
         }
 
-        // Перемешиваем очередь, чтобы враги шли вразнобой (алгоритм Фишера-Йейтса упрощенный)
         for (int i = 0; i < queue.Count; i++)
         {
             GameObject temp = queue[i];
@@ -1220,13 +1505,284 @@ public class WaveManager : MonoBehaviour
     }
 }
 
-// Вспомогательный класс для настроек в инспекторе
 [System.Serializable]
 public class EnemyWaveConfig
 {
-    public string name = "Enemy Type"; // Просто для удобства в инспекторе
+    public string name = "Enemy Type";
     public GameObject enemyPrefab;
-    public int baseCount = 5; // Сколько штук спавнить на 1-й волне
+    public int baseCount = 5;
+}   
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\WorldItemSpawner.cs
+================================================================================
+
+using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
+
+public class WorldItemSpawner : MonoBehaviour
+{
+    [Header("Что спавним")]
+    public GameObject itemPrefab; // Префаб коробки с патронами (AmmoPickup)
+
+    [Header("Где спавним")]
+    [Tooltip("Список точек, где могут появиться предметы. Можно перетащить сюда те же точки, что и в WaveManager.")]
+    public List<Transform> spawnPoints;
+
+    [Header("Настройки времени")]
+    public float minSpawnInterval = 10f; // Мин. время между спавнами
+    public float maxSpawnInterval = 20f; // Макс. время
+
+    [Header("Настройки количества")]
+    [Tooltip("Максимальное количество коробок, лежащих на карте одновременно. Чтобы не замусорить уровень.")]
+    public int maxItemsOnMap = 5;
+
+    [Header("Настройки лута")]
+    public int minAmmoInBox = 5;
+    public int maxAmmoInBox = 15;
+
+    // Список для отслеживания созданных коробок
+    private List<GameObject> _spawnedItems = new List<GameObject>();
+
+    void Start()
+    {
+        if (spawnPoints == null || spawnPoints.Count == 0)
+        {
+            Debug.LogWarning("WorldItemSpawner: Не назначены точки спавна!");
+            enabled = false;
+            return;
+        }
+
+        if (itemPrefab == null)
+        {
+            Debug.LogWarning("WorldItemSpawner: Не назначен префаб предмета!");
+            enabled = false;
+            return;
+        }
+
+        StartCoroutine(SpawnRoutine());
+    }
+
+    private IEnumerator SpawnRoutine()
+    {
+        // Небольшая задержка перед первым спавном
+        yield return new WaitForSeconds(Random.Range(minSpawnInterval, maxSpawnInterval));
+
+        while (true)
+        {
+            // 1. Очистка списка (удаляем из него ссылки на коробки, которые игрок уже подобрал)
+            // RemoveAll проверяет каждый элемент: если он null (уничтожен), удаляет из списка.
+            _spawnedItems.RemoveAll(item => item == null);
+
+            // 2. Проверка лимита
+            if (_spawnedItems.Count < maxItemsOnMap)
+            {
+                SpawnItem();
+            }
+
+            // 3. Ждем до следующего раза
+            float waitTime = Random.Range(minSpawnInterval, maxSpawnInterval);
+            yield return new WaitForSeconds(waitTime);
+        }
+    }
+
+    private void SpawnItem()
+    {
+        // Выбираем случайную точку
+        Transform randomPoint = spawnPoints[Random.Range(0, spawnPoints.Count)];
+
+        // Создаем предмет
+        GameObject newItem = Instantiate(itemPrefab, randomPoint.position, Quaternion.identity);
+
+        // Настраиваем количество патронов внутри
+        AmmoPickup pickupScript = newItem.GetComponent<AmmoPickup>();
+        if (pickupScript != null)
+        {
+            pickupScript.ammoAmount = Random.Range(minAmmoInBox, maxAmmoInBox + 1);
+        }
+
+        // Добавляем в список отслеживания
+        _spawnedItems.Add(newItem);
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\UI\GameManager.cs
+================================================================================
+
+using UnityEngine;
+
+public class GameManager : MonoBehaviour
+{
+    public static GameManager Instance { get; private set; }
+
+    [Header("Game State")]
+    public float totalSurvivalTime;
+    public int currentScore;
+    public int wavesSurvived;
+
+    [Header("Score Settings")]
+    public int baseScorePerWave = 100;
+    public float timeBonusCoefficient = 2000f;
+
+    // --- НОВОЕ: Публичное свойство для чтения состояния ---
+    public bool IsGameActive => _isGameActive;
+    // -----------------------------------------------------
+
+    private bool _isGameActive = true;
+    private float _waveStartTime;
+    private HUD _hud;
+
+    void Awake()
+    {
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
+
+        _hud = FindObjectOfType<HUD>();
+    }
+
+    void Start()
+    {
+        currentScore = 0;
+        totalSurvivalTime = 0;
+        wavesSurvived = 0;
+        _waveStartTime = Time.time;
+    }
+
+    void Update()
+    {
+        if (_isGameActive)
+        {
+            totalSurvivalTime += Time.deltaTime;
+
+            if (_hud != null)
+            {
+                _hud.UpdateGameTimer(totalSurvivalTime);
+            }
+        }
+    }
+
+    public void OnWaveStarted(int waveIndex)
+    {
+        _waveStartTime = Time.time;
+    }
+
+    public void OnWaveCompleted(int waveIndex)
+    {
+        wavesSurvived = waveIndex;
+        float waveDuration = Time.time - _waveStartTime;
+        waveDuration = Mathf.Max(waveDuration, 1f);
+
+        int wavePoints = waveIndex * baseScorePerWave;
+        int timeBonus = Mathf.RoundToInt(timeBonusCoefficient / waveDuration);
+        currentScore += wavePoints + timeBonus;
+    }
+
+    public void GameOver()
+    {
+        if (!_isGameActive) return;
+
+        _isGameActive = false;
+
+        GameOverMenu gameOverMenu = FindObjectOfType<GameOverMenu>(true);
+        if (gameOverMenu != null)
+        {
+            gameOverMenu.Show(currentScore, totalSurvivalTime, wavesSurvived);
+        }
+
+        Time.timeScale = 0f;
+    }
+}
+
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\UI\GameOverMenu.cs
+================================================================================
+
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+using UnityEngine.SceneManagement;
+
+public class GameOverMenu : MonoBehaviour
+{
+    [Header("UI References")]
+    public CanvasGroup panelGroup;
+
+    [Header("Stats Texts")]
+    public TMP_Text scoreText;
+    public TMP_Text timeText;
+    public TMP_Text waveText;
+
+    [Header("Buttons")]
+    public Button restartButton;
+    public Button exitButton;
+
+    private const string MENU_SCENE_NAME = "MenuScene";
+
+    void Start()
+    {
+        if (restartButton != null) restartButton.onClick.AddListener(RestartGame);
+        if (exitButton != null) exitButton.onClick.AddListener(ExitGame);
+
+        Hide();
+    }
+
+    // --- НОВОЕ: Слушаем кнопку ESC ---
+    void Update()
+    {
+        // Если меню невидимо, ничего не делаем
+        if (!gameObject.activeSelf) return;
+
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            ExitGame();
+        }
+    }
+    // ---------------------------------
+
+    public void Show(int score, float timePlayed, int waves)
+    {
+        gameObject.SetActive(true);
+        if (panelGroup != null)
+        {
+            panelGroup.alpha = 1;
+            panelGroup.interactable = true;
+            panelGroup.blocksRaycasts = true;
+        }
+
+        if (scoreText != null) scoreText.text = $"{score}";
+        if (timeText != null) timeText.text = $"{FormatTime(timePlayed)}";
+        if (waveText != null) waveText.text = $"{waves}";
+    }
+
+    private void Hide()
+    {
+        gameObject.SetActive(false);
+    }
+
+    private void RestartGame()
+    {
+        Time.timeScale = 1f;
+        string currentScene = SceneManager.GetActiveScene().name;
+
+        if (SceneLoader.Instance != null) SceneLoader.Instance.LoadScene(currentScene);
+        else SceneManager.LoadScene(currentScene);
+    }
+
+    private void ExitGame()
+    {
+        Time.timeScale = 1f;
+        if (SceneLoader.Instance != null) SceneLoader.Instance.LoadScene(MENU_SCENE_NAME);
+        else SceneManager.LoadScene(MENU_SCENE_NAME);
+    }
+
+    private string FormatTime(float timeInSeconds)
+    {
+        int minutes = Mathf.FloorToInt(timeInSeconds / 60F);
+        int seconds = Mathf.FloorToInt(timeInSeconds - minutes * 60);
+        return string.Format("{0:00}:{1:00}", minutes, seconds);
+    }
 }
 
 ================================================================================
@@ -1235,105 +1791,104 @@ public class EnemyWaveConfig
 
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
 public class HUD : MonoBehaviour
 {
-    [Header("Здоровье")]
-    public Slider healthSlider;
-    public Image healthFill;
-    public Gradient healthGradient;
-    
-    [Header("Дополнительная информация")]
-    public Text scoreText;
-    public Text ammoText;
-    public Text waveText;
-    
-    [Header("Анимация урона")]
-    public Animator damageAnimator;
-    
-    private float maxHealth = 100f;
-    private float currentHealth = 100f;
-    
-    public void Initialize(float maxHealthValue)
+    [Header("Cuteness Bar")]
+    public Slider cutenessSlider;
+    public Image cutenessFill;
+    public Gradient cutenessGradient;
+
+    [Header("Ammo Info")]
+    public TMP_Text currentAmmoText;
+    public TMP_Text totalAmmoText;
+
+    [Header("Game Info")]
+    public TMP_Text waveText;       // Сюда будет писаться "WAVE 1" или "NEXT: 5..."
+    public TMP_Text gameTimerText;  // НОВОЕ: Сюда перетащи текст общего таймера
+
+    [Header("Visual Darkening")]
+    public Gradient interfaceGradient;
+    public Image[] allHudImages;
+    public TMP_Text[] allHudTexts;
+
+    private float _maxCuteness;
+
+    public void Initialize(float maxCutenessValue, float currentCutenessValue)
     {
-        maxHealth = maxHealthValue;
-        currentHealth = maxHealthValue;
-        
-        if (healthSlider != null)
+        _maxCuteness = maxCutenessValue;
+        if (cutenessSlider != null)
         {
-            healthSlider.maxValue = maxHealth;
-            healthSlider.value = currentHealth;
-            UpdateHealthColor();
+            cutenessSlider.maxValue = _maxCuteness;
+            cutenessSlider.value = currentCutenessValue;
+        }
+        UpdateCutenessVisuals(currentCutenessValue);
+    }
+
+    public void UpdateCuteness(float currentCuteness)
+    {
+        if (cutenessSlider != null) cutenessSlider.value = currentCuteness;
+        UpdateCutenessVisuals(currentCuteness);
+    }
+
+    private void UpdateCutenessVisuals(float currentVal)
+    {
+        float percentage = Mathf.Clamp01(currentVal / _maxCuteness);
+
+        // 1. Полоска (полный цвет)
+        if (cutenessFill != null) cutenessFill.color = cutenessGradient.Evaluate(percentage);
+
+        // 2. Цвет интерфейса
+        Color targetColor = interfaceGradient.Evaluate(percentage);
+
+        // Картинки красим как обычно
+        if (allHudImages != null)
+        {
+            foreach (var img in allHudImages)
+            {
+                if (img != null && img != cutenessFill) img.color = targetColor;
+            }
+        }
+
+        // ТЕКСТ: Красим только ЛИЦЕВУЮ часть (faceColor), чтобы Аутлайн остался черным!
+        if (allHudTexts != null)
+        {
+            foreach (var txt in allHudTexts)
+            {
+                if (txt != null)
+                {
+                    // faceColor принимает Color32, приведение автоматическое
+                    txt.faceColor = targetColor;
+                }
+            }
         }
     }
-    
-    public void UpdateHealth(float newHealth)
+
+    // --- Обновление информации ---
+
+    public void UpdateAmmo(int clip, int total)
     {
-        currentHealth = Mathf.Clamp(newHealth, 0, maxHealth);
-        
-        if (healthSlider != null)
-        {
-            healthSlider.value = currentHealth;
-            UpdateHealthColor();
-        }
-        
-        // Анимация получения урона
-        if (damageAnimator != null && newHealth < currentHealth)
-        {
-            damageAnimator.SetTrigger("TakeDamage");
-        }
+        if (currentAmmoText != null) currentAmmoText.text = clip.ToString();
+        if (totalAmmoText != null) totalAmmoText.text = total.ToString();
     }
-    
-    private void UpdateHealthColor()
+
+    public void UpdateWaveText(string text)
     {
-        if (healthFill != null && healthGradient != null)
+        if (waveText != null) waveText.text = text;
+    }
+
+    public void UpdateGameTimer(float timeInSeconds)
+    {
+        if (gameTimerText != null)
         {
-            float healthPercentage = currentHealth / maxHealth;
-            healthFill.color = healthGradient.Evaluate(healthPercentage);
+            // Форматируем время в ММ:СС
+            int minutes = Mathf.FloorToInt(timeInSeconds / 60F);
+            int seconds = Mathf.FloorToInt(timeInSeconds - minutes * 60);
+            gameTimerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
         }
     }
-    
-    public void TakeDamage(float damageAmount)
-    {
-        float newHealth = currentHealth - damageAmount;
-        UpdateHealth(newHealth);
-    }
-    
-    public void Show()
-    {
-        gameObject.SetActive(true);
-    }
-    
-    public void Hide()
-    {
-        gameObject.SetActive(false);
-    }
-    
-    // Дополнительные методы для обновления HUD
-    public void UpdateScore(int score)
-    {
-        if (scoreText != null)
-        {
-            scoreText.text = $"Очки: {score}";
-        }
-    }
-    
-    public void UpdateAmmo(int currentAmmo, int maxAmmo)
-    {
-        if (ammoText != null)
-        {
-            ammoText.text = $"Патроны: {currentAmmo}/{maxAmmo}";
-        }
-    }
-    
-    public void UpdateWave(int waveNumber)
-    {
-        if (waveText != null)
-        {
-            waveText.text = $"Волна: {waveNumber}";
-        }
-    }
-}
+}   
 
 ================================================================================
 ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\UI\MainMenu.cs
@@ -1341,6 +1896,7 @@ public class HUD : MonoBehaviour
 
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 public class MainMenu : MonoBehaviour
 {
@@ -1349,124 +1905,84 @@ public class MainMenu : MonoBehaviour
     public Button playButton;
     public Button settingsButton;
     public Button exitButton;
-    
+
     [Header("Настройки")]
     public SettingsMenu settingsMenu;
-    
+
+    private const string GAME_SCENE_NAME = "GameScene";
+
     private void Start()
     {
         InitializeButtons();
         Show();
+        if (settingsMenu != null) settingsMenu.gameObject.SetActive(false);
     }
-    
+
+    // --- НОВОЕ: Обработка ESC в главном меню ---
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            // Если открыты настройки -> нажимаем Back
+            if (settingsMenu != null && settingsMenu.gameObject.activeSelf)
+            {
+                settingsMenu.CloseSettings();
+            }
+            // Иначе (опционально) -> можно вызывать окно выхода из игры, но обычно в меню ESC ничего не делает
+        }
+    }
+    // -------------------------------------------
+
     private void InitializeButtons()
     {
-        // Кнопка "Играть"
         if (playButton != null)
         {
-            playButton.onClick.RemoveAllListeners();
-            playButton.onClick.AddListener(() =>
-            {
-                PlaySound();
-                PlayGame();
+            playButton.onClick.AddListener(() => {
+                if (SceneLoader.Instance != null) SceneLoader.Instance.LoadScene(GAME_SCENE_NAME);
+                else SceneManager.LoadScene(GAME_SCENE_NAME);
             });
         }
-        
-        // Кнопка "Настройки"
-        if (settingsButton != null)
-        {
-            settingsButton.onClick.RemoveAllListeners();
-            settingsButton.onClick.AddListener(() =>
-            {
-                PlaySound();
-                ShowSettings();
-            });
-        }
-        
-        // Кнопка "Выход"
+
+        if (settingsButton != null) settingsButton.onClick.AddListener(OpenSettings);
+
         if (exitButton != null)
         {
-            exitButton.onClick.RemoveAllListeners();
-            exitButton.onClick.AddListener(() =>
-            {
-                PlaySound();
-                ExitGame();
+            exitButton.onClick.AddListener(() => {
+                Application.Quit();
+#if UNITY_EDITOR
+                UnityEditor.EditorApplication.isPlaying = false;
+#endif
             });
         }
     }
-    
-    public void PlayGame()
-    {
-        // Используем SceneLoader для плавной загрузки
-        if (SceneLoader.Instance != null)
-        {
-            SceneLoader.Instance.LoadScene("GameScene");
-        }
-        else
-        {
-            // Если SceneLoader не используется
-            UnityEngine.SceneManagement.SceneManager.LoadScene("GameScene");
-        }
-    }
-    
-    public void ShowSettings()
+
+    public void OpenSettings()
     {
         Hide();
         if (settingsMenu != null)
         {
-            settingsMenu.Show();
+            settingsMenu.Open(() => this.Show());
         }
     }
-    
+
     public void Show()
     {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.ShowCanvasGroup(mainMenuPanel);
-        }
-        else if (mainMenuPanel != null)
+        if (mainMenuPanel != null)
         {
             mainMenuPanel.alpha = 1;
             mainMenuPanel.interactable = true;
             mainMenuPanel.blocksRaycasts = true;
         }
+        gameObject.SetActive(true);
     }
-    
+
     public void Hide()
     {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.HideCanvasGroup(mainMenuPanel);
-        }
-        else if (mainMenuPanel != null)
+        if (mainMenuPanel != null)
         {
             mainMenuPanel.alpha = 0;
             mainMenuPanel.interactable = false;
             mainMenuPanel.blocksRaycasts = false;
-        }
-    }
-    
-    private void PlaySound()
-    {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.PlaySound(UIManager.Instance.buttonClickSound);
-        }
-    }
-    
-    private void ExitGame()
-    {
-        if (SceneLoader.Instance != null)
-        {
-            SceneLoader.Instance.QuitGame();
-        }
-        else
-        {
-            #if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-            #else
-            Application.Quit();
-            #endif
         }
     }
 }
@@ -1477,6 +1993,7 @@ public class MainMenu : MonoBehaviour
 
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 public class PauseMenu : MonoBehaviour
 {
@@ -1485,157 +2002,118 @@ public class PauseMenu : MonoBehaviour
     public Button resumeButton;
     public Button settingsButton;
     public Button mainMenuButton;
-    
+
     [Header("Настройки")]
     public SettingsMenu settingsMenu;
-    
+
     private bool isPaused = false;
-    
+    private const string MENU_SCENE_NAME = "MenuScene";
+
     private void Start()
     {
         InitializeButtons();
         Hide();
+        if (settingsMenu != null) settingsMenu.gameObject.SetActive(false);
     }
-    
+
     private void InitializeButtons()
     {
-        // Кнопка "Продолжить"
-        if (resumeButton != null)
-        {
-            resumeButton.onClick.RemoveAllListeners();
-            resumeButton.onClick.AddListener(() =>
-            {
-                PlaySound();
-                ResumeGame();
-            });
-        }
-        
-        // Кнопка "Настройки"
-        if (settingsButton != null)
-        {
-            settingsButton.onClick.RemoveAllListeners();
-            settingsButton.onClick.AddListener(() =>
-            {
-                PlaySound();
-                ShowSettings();
-            });
-        }
-        
-        // Кнопка "Выход в главное меню"
-        if (mainMenuButton != null)
-        {
-            mainMenuButton.onClick.RemoveAllListeners();
-            mainMenuButton.onClick.AddListener(() =>
-            {
-                PlaySound();
-                ReturnToMainMenu();
-            });
-        }
+        if (resumeButton != null) resumeButton.onClick.AddListener(ResumeGame);
+        if (settingsButton != null) settingsButton.onClick.AddListener(OpenSettings);
+        if (mainMenuButton != null) mainMenuButton.onClick.AddListener(ReturnToMainMenu);
     }
-    
+
     private void Update()
     {
-        // Обработка ESC только в игровой сцене
+        // 1. Если игра окончена (Game Over), пауза не должна работать.
+        // GameOverMenu сам обработает нажатие ESC.
+        if (GameManager.Instance != null && !GameManager.Instance.IsGameActive)
+        {
+            return;
+        }
+
+        // 2. Обработка ESC
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            TogglePause();
+            // ПРИОРИТЕТ 1: Если открыты настройки -> Закрываем их (Back)
+            if (settingsMenu != null && settingsMenu.gameObject.activeSelf)
+            {
+                settingsMenu.CloseSettings();
+            }
+            // ПРИОРИТЕТ 2: Если настройки закрыты -> Переключаем Паузу
+            else
+            {
+                TogglePause();
+            }
         }
     }
-    
+
     private void TogglePause()
     {
-        if (isPaused)
-        {
-            ResumeGame();
-        }
-        else
-        {
-            Show();
-        }
+        if (isPaused) ResumeGame();
+        else Show();
     }
-    
+
     public void Show()
     {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.ShowCanvasGroup(pauseMenuPanel);
-            UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
-        }
-        else if (pauseMenuPanel != null)
+        if (pauseMenuPanel != null)
         {
             pauseMenuPanel.alpha = 1;
             pauseMenuPanel.interactable = true;
             pauseMenuPanel.blocksRaycasts = true;
         }
-        
         PauseGame();
     }
-    
+
     public void Hide()
     {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.HideCanvasGroup(pauseMenuPanel);
-            UIManager.Instance.PlaySound(UIManager.Instance.menuCloseSound);
-        }
-        else if (pauseMenuPanel != null)
+        if (pauseMenuPanel != null)
         {
             pauseMenuPanel.alpha = 0;
             pauseMenuPanel.interactable = false;
             pauseMenuPanel.blocksRaycasts = false;
         }
-        
         ResumeGameTime();
     }
-    
+
     public void ResumeGame()
     {
         Hide();
     }
-    
-    public void ShowSettings()
+
+    public void OpenSettings()
     {
-        Hide();
+        // Скрываем паузу визуально, но логика PauseMenu продолжает работать
+        if (pauseMenuPanel != null)
+        {
+            pauseMenuPanel.alpha = 0;
+            pauseMenuPanel.interactable = false;
+            pauseMenuPanel.blocksRaycasts = false;
+        }
+
         if (settingsMenu != null)
         {
-            settingsMenu.Show();
+            settingsMenu.Open(() => this.Show());
         }
     }
-    
+
     private void ReturnToMainMenu()
     {
-        // Сбрасываем паузу
         ResumeGameTime();
-        
-        // Загружаем меню
-        if (SceneLoader.Instance != null)
-        {
-            SceneLoader.Instance.LoadScene("MenuScene");
-        }
-        else
-        {
-            UnityEngine.SceneManagement.SceneManager.LoadScene("MenuScene");
-        }
+        if (SceneLoader.Instance != null) SceneLoader.Instance.LoadScene(MENU_SCENE_NAME);
+        else SceneManager.LoadScene(MENU_SCENE_NAME);
     }
-    
+
     private void PauseGame()
     {
         Time.timeScale = 0f;
         isPaused = true;
     }
-    
+
     private void ResumeGameTime()
     {
         Time.timeScale = 1f;
         isPaused = false;
-    }
-    
-    private void PlaySound()
-    {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.PlaySound(UIManager.Instance.buttonClickSound);
-        }
     }
 }
 
@@ -1733,158 +2211,145 @@ public class SceneLoader : MonoBehaviour
 
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Audio;
 
 public class SettingsMenu : MonoBehaviour
 {
-    [Header("Компоненты")]
-    public CanvasGroup settingsPanel;
-    public Slider volumeSlider;
+    [Header("Audio Settings")]
+    [Tooltip("Перетащи сюда ассет AudioMixer")]
+    public AudioMixer mainMixer;
+    public Slider musicSlider;
+    public Slider sfxSlider;
+
+    [Header("Screen Settings")]
+    public Button fullscreenBtn;
+    public Button windowedBtn;
+
+    [Header("Button Visuals")]
+    public Image fullscreenBtnImage;
+    public Image windowedBtnImage;
+    public Sprite activeSprite;
+    public Sprite inactiveSprite;
+
+    [Header("Navigation")]
     public Button backButton;
-    public Toggle fullscreenToggle;
-    
+
+    // Сюда мы запомним действие "Куда вернуться"
+    private System.Action _onBackCallback;
+
+    private void Awake()
+    {
+        InitializeSettings();
+
+        // Подписываемся на изменения слайдеров
+        if (musicSlider != null) musicSlider.onValueChanged.AddListener(SetMusicVolume);
+        if (sfxSlider != null) sfxSlider.onValueChanged.AddListener(SetSFXVolume);
+
+        if (fullscreenBtn != null) fullscreenBtn.onClick.AddListener(() => SetFullscreen(true));
+        if (windowedBtn != null) windowedBtn.onClick.AddListener(() => SetFullscreen(false));
+
+        if (backButton != null) backButton.onClick.AddListener(CloseSettings);
+
+        Hide();
+    }
+
+    private void InitializeSettings()
+    {
+        // Загружаем сохраненные значения или ставим 0.75 по умолчанию
+        float savedMusic = PlayerPrefs.GetFloat("MusicVol", 0.75f);
+        float savedSFX = PlayerPrefs.GetFloat("SFXVol", 0.75f);
+
+        if (musicSlider != null) musicSlider.value = savedMusic;
+        if (sfxSlider != null) sfxSlider.value = savedSFX;
+
+        bool isFull = PlayerPrefs.GetInt("FullscreenState", Screen.fullScreen ? 1 : 0) == 1;
+        SetFullscreen(isFull);
+    }
+
     private void Start()
     {
-        InitializeComponents();
-        LoadSettings();
-        Hide(); // Скрываем при старте
+        // Принудительно обновляем микшер при старте сцены,
+        // так как AudioMixer сбрасывает настройки при перезапуске игры
+        SetMusicVolume(musicSlider.value);
+        SetSFXVolume(sfxSlider.value);
     }
-    
-    private void InitializeComponents()
+
+    public void SetMusicVolume(float value)
     {
-        // Слайдер громкости
-        if (volumeSlider != null)
+        PlayerPrefs.SetFloat("MusicVol", value);
+
+        // Формула: Log10(0.0001) * 20 = -80dB (тишина), Log10(1) * 20 = 0dB (громко)
+        float dB = Mathf.Log10(Mathf.Clamp(value, 0.0001f, 1f)) * 20;
+
+        if (mainMixer != null)
         {
-            volumeSlider.onValueChanged.AddListener(OnVolumeChanged);
-        }
-        
-        // Кнопка назад
-        if (backButton != null)
-        {
-            backButton.onClick.RemoveAllListeners();
-            backButton.onClick.AddListener(() =>
+            // SetFloat возвращает false, если параметр не найден
+            bool result = mainMixer.SetFloat("MusicVol", dB);
+            if (!result)
             {
-                PlaySound();
-                Hide();
-            });
-        }
-        
-        // Переключатель полноэкранного режима
-        if (fullscreenToggle != null)
-        {
-            fullscreenToggle.onValueChanged.AddListener(OnFullscreenChanged);
+                Debug.LogError("SettingsMenu: Не найден параметр 'MusicVol' в AudioMixer! \n" +
+                               "1. Выдели группу Music в AudioMixer.\n" +
+                               "2. ПКМ по Volume -> Expose.\n" +
+                               "3. В списке Exposed Parameters переименуй его в 'MusicVol'.");
+            }
         }
     }
-    
-    public void Show()
+
+    public void SetSFXVolume(float value)
     {
-        if (UIManager.Instance != null)
+        PlayerPrefs.SetFloat("SFXVol", value);
+
+        float dB = Mathf.Log10(Mathf.Clamp(value, 0.0001f, 1f)) * 20;
+
+        if (mainMixer != null)
         {
-            UIManager.Instance.ShowCanvasGroup(settingsPanel);
-            UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
-        }
-        else if (settingsPanel != null)
-        {
-            settingsPanel.alpha = 1;
-            settingsPanel.interactable = true;
-            settingsPanel.blocksRaycasts = true;
-        }
-        
-        LoadSettings();
-    }
-    
-    public void Hide()
-    {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.HideCanvasGroup(settingsPanel);
-            UIManager.Instance.PlaySound(UIManager.Instance.menuCloseSound);
-        }
-        else if (settingsPanel != null)
-        {
-            settingsPanel.alpha = 0;
-            settingsPanel.interactable = false;
-            settingsPanel.blocksRaycasts = false;
-        }
-        
-        SaveSettings();
-        
-        // Возвращаемся к предыдущему меню
-        ReturnToPreviousMenu();
-    }
-    
-    private void LoadSettings()
-    {
-        // Громкость
-        if (volumeSlider != null)
-        {
-            float volume = PlayerPrefs.GetFloat("MasterVolume", 1f);
-            volumeSlider.value = volume;
-            ApplyVolume(volume);
-        }
-        
-        // Полноэкранный режим
-        if (fullscreenToggle != null)
-        {
-            bool isFullscreen = PlayerPrefs.GetInt("Fullscreen", 1) == 1;
-            fullscreenToggle.isOn = isFullscreen;
-            Screen.fullScreen = isFullscreen;
+            bool result = mainMixer.SetFloat("SFXVol", dB);
+            if (!result)
+            {
+                Debug.LogError("SettingsMenu: Не найден параметр 'SFXVol' в AudioMixer! Проверь Exposed Parameters.");
+            }
         }
     }
-    
-    private void SaveSettings()
-    {
-        // Сохраняем громкость
-        if (volumeSlider != null)
-        {
-            PlayerPrefs.SetFloat("MasterVolume", volumeSlider.value);
-        }
-        
-        // Сохраняем настройки полноэкранного режима
-        if (fullscreenToggle != null)
-        {
-            PlayerPrefs.SetInt("Fullscreen", fullscreenToggle.isOn ? 1 : 0);
-        }
-        
-        PlayerPrefs.Save();
-    }
-    
-    private void OnVolumeChanged(float volume)
-    {
-        ApplyVolume(volume);
-    }
-    
-    private void ApplyVolume(float volume)
-    {
-        AudioListener.volume = volume;
-    }
-    
-    private void OnFullscreenChanged(bool isFullscreen)
+
+    public void SetFullscreen(bool isFullscreen)
     {
         Screen.fullScreen = isFullscreen;
+        PlayerPrefs.SetInt("FullscreenState", isFullscreen ? 1 : 0);
+        UpdateScreenButtons(isFullscreen);
     }
-    
-    private void ReturnToPreviousMenu()
+
+    private void UpdateScreenButtons(bool isFullscreen)
     {
-        // Находим главное меню или меню паузы в сцене
-        MainMenu mainMenu = FindObjectOfType<MainMenu>();
-        PauseMenu pauseMenu = FindObjectOfType<PauseMenu>();
-        
-        if (mainMenu != null)
+        if (activeSprite != null && inactiveSprite != null)
         {
-            mainMenu.Show();
-        }
-        else if (pauseMenu != null)
-        {
-            pauseMenu.Show();
+            if (fullscreenBtnImage != null)
+                fullscreenBtnImage.sprite = isFullscreen ? activeSprite : inactiveSprite;
+
+            if (windowedBtnImage != null)
+                windowedBtnImage.sprite = !isFullscreen ? activeSprite : inactiveSprite;
         }
     }
-    
-    private void PlaySound()
+
+    // --- ЛОГИКА ОТКРЫТИЯ ---
+
+    public void Open(System.Action onBackAction)
     {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.PlaySound(UIManager.Instance.buttonClickSound);
-        }
+        _onBackCallback = onBackAction; // Запоминаем, кто нас позвал
+        gameObject.SetActive(true);
+    }
+
+    public void CloseSettings()
+    {
+        PlayerPrefs.Save();
+        Hide();
+
+        // Вызываем код возврата (если он был передан)
+        _onBackCallback?.Invoke();
+    }
+
+    private void Hide()
+    {
+        gameObject.SetActive(false);
     }
 }
 

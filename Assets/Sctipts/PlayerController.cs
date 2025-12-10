@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Audio;
 
-// Добавляем требование компонента, чтобы избежать ошибок null reference
 [RequireComponent(typeof(AudioSource))]
 public class PlayerController : MonoBehaviour
 {
@@ -9,8 +9,10 @@ public class PlayerController : MonoBehaviour
     public float moveSpeed = 10f;
 
     [Header("Audio Settings")]
-    public AudioClip[] footstepSounds; // Массив звуков для разнообразия
-    public float stepInterval = 0.5f;  // Как часто играть звук (чем меньше, тем чаще)
+    // Перетащи сюда группу SFX
+    public AudioMixerGroup sfxGroup;
+    public AudioClip[] footstepSounds;
+    public float stepInterval = 0.5f;
 
     [Header("References")]
     public Camera cam;
@@ -25,13 +27,17 @@ public class PlayerController : MonoBehaviour
 
     void Awake()
     {
-        // Кэшируем компонент при инициализации
         _audioSource = GetComponent<AudioSource>();
+
+        // Привязка к микшеру
+        if (sfxGroup != null && _audioSource != null)
+        {
+            _audioSource.outputAudioMixerGroup = sfxGroup;
+        }
     }
 
     void Update()
     {
-        // 1. Считываем клавиатуру
         movement = Vector2.zero;
         if (Keyboard.current != null)
         {
@@ -43,13 +49,11 @@ public class PlayerController : MonoBehaviour
 
         movement = movement.normalized;
 
-        // 2. Считываем мышь
         if (Mouse.current != null)
         {
             mousePos = cam.ScreenToWorldPoint(Mouse.current.position.ReadValue());
         }
 
-        // 3. Логика звука шагов
         HandleFootsteps();
     }
 
@@ -65,7 +69,6 @@ public class PlayerController : MonoBehaviour
 
     private void HandleFootsteps()
     {
-        // Если игрок двигается (вектор движения не равен нулю)
         if (movement.sqrMagnitude > 0.1f)
         {
             _stepTimer -= Time.deltaTime;
@@ -73,12 +76,11 @@ public class PlayerController : MonoBehaviour
             if (_stepTimer <= 0)
             {
                 PlayRandomFootstep();
-                _stepTimer = stepInterval; // Сброс таймера
+                _stepTimer = stepInterval;
             }
         }
         else
         {
-            // Сбрасываем таймер, чтобы при начале движения звук был сразу
             _stepTimer = 0;
         }
     }
@@ -87,10 +89,7 @@ public class PlayerController : MonoBehaviour
     {
         if (footstepSounds.Length == 0) return;
 
-        // Выбираем случайный звук из массива для естественности
         int index = Random.Range(0, footstepSounds.Length);
-
-        // Изменяем высоту тона (pitch) немного, чтобы звуки не казались роботоподобными
         _audioSource.pitch = Random.Range(0.9f, 1.1f);
         _audioSource.PlayOneShot(footstepSounds[index]);
     }

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 public class MainMenu : MonoBehaviour
 {
@@ -8,124 +9,94 @@ public class MainMenu : MonoBehaviour
     public Button playButton;
     public Button settingsButton;
     public Button exitButton;
-    
+
     [Header("Настройки")]
     public SettingsMenu settingsMenu;
-    
+
+    private const string GAME_SCENE_NAME = "GameScene";
+
     private void Start()
     {
+        if (settingsMenu != null && settingsMenu.gameObject.scene.name == null)
+        {
+            Debug.LogError("ОШИБКА: SettingsMenu - это префаб! Перетащи объект со сцены.");
+        }
+
+        if (settingsMenu != null) settingsMenu.gameObject.SetActive(false);
+
         InitializeButtons();
         Show();
     }
-    
+
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (settingsMenu != null && settingsMenu.gameObject.activeSelf)
+            {
+                settingsMenu.CloseSettings();
+            }
+        }
+    }
+
     private void InitializeButtons()
     {
-        // Кнопка "Играть"
         if (playButton != null)
         {
-            playButton.onClick.RemoveAllListeners();
-            playButton.onClick.AddListener(() =>
-            {
-                PlaySound();
-                PlayGame();
+            playButton.onClick.AddListener(() => {
+                if (SceneLoader.Instance != null) SceneLoader.Instance.LoadScene(GAME_SCENE_NAME);
+                else SceneManager.LoadScene(GAME_SCENE_NAME);
             });
+            // Добавляем компонент звука программно, если забыли в редакторе (для надежности)
+            if (playButton.GetComponent<UIButtonSound>() == null) playButton.gameObject.AddComponent<UIButtonSound>();
         }
-        
-        // Кнопка "Настройки"
+
         if (settingsButton != null)
         {
-            settingsButton.onClick.RemoveAllListeners();
-            settingsButton.onClick.AddListener(() =>
-            {
-                PlaySound();
-                ShowSettings();
-            });
+            settingsButton.onClick.AddListener(OpenSettings);
+            if (settingsButton.GetComponent<UIButtonSound>() == null) settingsButton.gameObject.AddComponent<UIButtonSound>();
         }
-        
-        // Кнопка "Выход"
+
         if (exitButton != null)
         {
-            exitButton.onClick.RemoveAllListeners();
-            exitButton.onClick.AddListener(() =>
-            {
-                PlaySound();
-                ExitGame();
-            });
+            exitButton.onClick.AddListener(() => Application.Quit());
+            if (exitButton.GetComponent<UIButtonSound>() == null) exitButton.gameObject.AddComponent<UIButtonSound>();
         }
     }
-    
-    public void PlayGame()
+
+    public void OpenSettings()
     {
-        // Используем SceneLoader для плавной загрузки
-        if (SceneLoader.Instance != null)
-        {
-            SceneLoader.Instance.LoadScene("GameScene");
-        }
-        else
-        {
-            // Если SceneLoader не используется
-            UnityEngine.SceneManagement.SceneManager.LoadScene("GameScene");
-        }
-    }
-    
-    public void ShowSettings()
-    {
+        if (settingsMenu == null) return;
+
+        // --- ЗВУК ОТКРЫТИЯ ---
+        if (UIManager.Instance != null)
+            UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
+        // ---------------------
+
         Hide();
-        if (settingsMenu != null)
-        {
-            settingsMenu.Show();
-        }
+
+        settingsMenu.Open(onBackAction: () => {
+            this.Show();
+        });
     }
-    
+
     public void Show()
     {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.ShowCanvasGroup(mainMenuPanel);
-        }
-        else if (mainMenuPanel != null)
+        if (mainMenuPanel != null)
         {
             mainMenuPanel.alpha = 1;
             mainMenuPanel.interactable = true;
             mainMenuPanel.blocksRaycasts = true;
         }
     }
-    
+
     public void Hide()
     {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.HideCanvasGroup(mainMenuPanel);
-        }
-        else if (mainMenuPanel != null)
+        if (mainMenuPanel != null)
         {
             mainMenuPanel.alpha = 0;
             mainMenuPanel.interactable = false;
             mainMenuPanel.blocksRaycasts = false;
-        }
-    }
-    
-    private void PlaySound()
-    {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.PlaySound(UIManager.Instance.buttonClickSound);
-        }
-    }
-    
-    private void ExitGame()
-    {
-        if (SceneLoader.Instance != null)
-        {
-            SceneLoader.Instance.QuitGame();
-        }
-        else
-        {
-            #if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-            #else
-            Application.Quit();
-            #endif
         }
     }
 }

@@ -1,34 +1,54 @@
 using UnityEngine;
+using UnityEngine.Audio; // ВАЖНО
 
 [RequireComponent(typeof(Collider2D))]
 public class AmmoPickup : MonoBehaviour
 {
-    [Tooltip("Количество патронов в этой коробке")]
+    [Header("Settings")]
     public int ammoAmount = 10;
 
-    [Tooltip("Звук подбора")]
+    [Header("Audio")]
     public AudioClip pickupSound;
+    // Перетащи сюда группу SFX
+    public AudioMixerGroup sfxGroup;
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
-        // Проверяем, что в нас вошел именно Игрок
         if (collision.CompareTag("Player"))
         {
-            // Пытаемся получить компонент стрельбы
             PlayerShooting shooting = collision.GetComponent<PlayerShooting>();
 
             if (shooting != null)
             {
                 shooting.AddAmmo(ammoAmount);
 
-                // Воспроизводим звук (через AudioSource.PlayClipAtPoint, т.к. объект сейчас уничтожится)
                 if (pickupSound != null)
                 {
-                    AudioSource.PlayClipAtPoint(pickupSound, transform.position);
+                    // Вместо PlayClipAtPoint используем свой метод с микшером
+                    PlaySoundWithMixer(pickupSound, transform.position);
                 }
 
                 Destroy(gameObject);
             }
         }
+    }
+
+    private void PlaySoundWithMixer(AudioClip clip, Vector3 position)
+    {
+        // Создаем временный объект для звука
+        GameObject tempAudio = new GameObject("AmmoPickupSound");
+        tempAudio.transform.position = position;
+
+        AudioSource source = tempAudio.AddComponent<AudioSource>();
+        source.clip = clip;
+
+        // --- САМОЕ ГЛАВНОЕ: Назначаем группу микшера ---
+        if (sfxGroup != null)
+        {
+            source.outputAudioMixerGroup = sfxGroup;
+        }
+
+        source.Play();
+        Destroy(tempAudio, clip.length);
     }
 }

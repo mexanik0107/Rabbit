@@ -28,8 +28,8 @@ Transform:
   m_GameObject: {fileID: 1629550869004554952}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -5.0792, y: 6.6247, z: 0}
-  m_LocalScale: {x: 0.3187, y: 0.4622, z: 1}
+  m_LocalPosition: {x: -5.1405, y: 6.7706, z: 0}
+  m_LocalScale: {x: 0.027796619, y: 0.04473654, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -81,8 +81,8 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
-  m_Color: {r: 0, g: 1, b: 0.09638786, a: 1}
+  m_Sprite: {fileID: -1017125010, guid: 8ed49f9b6d8ad464aa034ec049ba4369, type: 3}
+  m_Color: {r: 0.3895219, g: 0, b: 0.9056604, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -126,17 +126,17 @@ BoxCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0, y: 0}
+  m_Offset: {x: 0.116425276, y: 0.024106026}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 1, y: 1}
+    oldSize: {x: 10.04, y: 9.94}
     newSize: {x: 1, y: 1}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 1, y: 1}
+  m_Size: {x: 10.390842, y: 10.017584}
   m_EdgeRadius: 0
 --- !u!114 &5186456726959788984
 MonoBehaviour:
@@ -152,3 +152,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::AmmoPickup
   ammoAmount: 10
   pickupSound: {fileID: 0}
+  sfxGroup: {fileID: 4694438467389381592, guid: 0ddea127dafa66941a101985be077c4e, type: 2}

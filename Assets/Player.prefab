@@ -111,6 +111,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   moveSpeed: 10
+  sfxGroup: {fileID: 4694438467389381592, guid: 0ddea127dafa66941a101985be077c4e, type: 2}
   footstepSounds: []
   stepInterval: 0.5
   cam: {fileID: 0}
@@ -157,10 +158,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerCuteness
   maxCuteness: 100
   startCuteness: 0
-  passiveCutenessGain: 1
+  killReductionPercent: 10
   hud: {fileID: 0}
-  damageSound: {fileID: 0}
-  restoreSound: {fileID: 0}
+  sfxGroup: {fileID: 4694438467389381592, guid: 0ddea127dafa66941a101985be077c4e, type: 2}
+  hitSound: {fileID: 0}
+  healSound: {fileID: 0}
   gameOverSound: {fileID: 0}
 --- !u!82 &2790298746477229175
 AudioSource:
@@ -171,7 +173,7 @@ AudioSource:
   m_GameObject: {fileID: 743715614564312972}
   m_Enabled: 1
   serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 0}
+  OutputAudioMixerGroup: {fileID: 4694438467389381592, guid: 0ddea127dafa66941a101985be077c4e, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 1
@@ -273,6 +275,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerShooting
   bulletPrefab: {fileID: 4285819608415087035, guid: 5508bc89188c0ef4da9e9a07bcd35078, type: 3}
   firePoint: {fileID: 2102473254057265702}
+  hud: {fileID: 0}
+  sfxGroup: {fileID: 4694438467389381592, guid: 0ddea127dafa66941a101985be077c4e, type: 2}
+  shootSound: {fileID: 0}
+  reloadSound: {fileID: 0}
+  emptyClickSound: {fileID: 0}
   damage: 2
   bulletSpeed: 20
   fireRate: 0.2
@@ -281,9 +288,6 @@ MonoBehaviour:
   maxTotalAmmo: 450
   startTotalAmmo: 90
   reloadTime: 1.5
-  shootSound: {fileID: 0}
-  reloadSound: {fileID: 0}
-  emptyClickSound: {fileID: 0}
 --- !u!70 &3930816372065356675
 CapsuleCollider2D:
   m_ObjectHideFlags: 0
@@ -378,8 +382,8 @@ Transform:
   m_GameObject: {fileID: 6612216405406198438}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalPosition: {x: 0.206, y: -0.678, z: 0}
+  m_LocalScale: {x: 6.341136, y: 6.3831086, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 838379939490018077}

@@ -1,5 +1,6 @@
 using UnityEngine;
 using System;
+using UnityEngine.Audio;
 
 [RequireComponent(typeof(AudioSource))]
 public class EnemyHealth : MonoBehaviour
@@ -8,6 +9,8 @@ public class EnemyHealth : MonoBehaviour
     public float maxHealth = 10f;
 
     [Header("Audio")]
+    // Перетащи сюда группу SFX в префабе врага
+    public AudioMixerGroup sfxGroup;
     public AudioClip hitSound;
     public AudioClip deathSound;
 
@@ -19,6 +22,12 @@ public class EnemyHealth : MonoBehaviour
     void Awake()
     {
         _audioSource = GetComponent<AudioSource>();
+
+        // Привязываем основной источник звука (для получения урона) к микшеру
+        if (sfxGroup != null && _audioSource != null)
+        {
+            _audioSource.outputAudioMixerGroup = sfxGroup;
+        }
     }
 
     void OnEnable()
@@ -43,22 +52,35 @@ public class EnemyHealth : MonoBehaviour
 
     private void Die()
     {
-        // --- НОВОЕ: Проверка на лут ---
-        // Пытаемся найти компонент LootDropper на этом же враге
-        // Если он есть, вызываем метод TryDropLoot()
         if (TryGetComponent(out LootDropper looter))
         {
             looter.TryDropLoot();
         }
-        // ------------------------------
 
         OnEnemyDied?.Invoke(5f);
 
         if (deathSound != null)
         {
-            AudioSource.PlayClipAtPoint(deathSound, transform.position);
+            // Создаем временный звук с привязкой к микшеру
+            PlaySoundAndDestroy(deathSound, transform.position);
         }
 
         Destroy(gameObject);
+    }
+
+    private void PlaySoundAndDestroy(AudioClip clip, Vector3 position)
+    {
+        GameObject go = new GameObject("DeathSound");
+        go.transform.position = position;
+        AudioSource src = go.AddComponent<AudioSource>();
+        src.clip = clip;
+
+        if (sfxGroup != null)
+        {
+            src.outputAudioMixerGroup = sfxGroup;
+        }
+
+        src.Play();
+        Destroy(go, clip.length);
     }
 }

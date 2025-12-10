@@ -1,148 +1,132 @@
 using UnityEngine;
+using UnityEngine.Audio;
 
 [RequireComponent(typeof(AudioSource))]
-[RequireComponent(typeof(PlayerController))]
 public class PlayerCuteness : MonoBehaviour
 {
-    [Header("Cuteness Settings")]
+    [Header("Settings")]
     public float maxCuteness = 100f;
     public float startCuteness = 0f;
 
-    [Header("Gameplay Balance")]
-    public float passiveCutenessGain = 1f; // Пассивное накопление милоты со временем
+    [Header("Combat Balance")]
+    [Range(0f, 100f)]
+    public float killReductionPercent = 10f;
 
-    [Header("UI References")]
-    public HUD hud; // Ссылка на HUD (нужно перетащить в инспекторе)
+    [Header("References")]
+    public HUD hud;
 
     [Header("Audio")]
-    public AudioClip damageSound;   // Звук получения милоты
-    public AudioClip restoreSound;  // Звук восстановления (убийство врага)
-    public AudioClip gameOverSound; // Звук Game Over
+    // Перетащи сюда группу SFX
+    public AudioMixerGroup sfxGroup;
+    public AudioClip hitSound;
+    public AudioClip healSound;
+    public AudioClip gameOverSound;
 
-    public float CurrentCuteness { get; private set; }
-
-    private bool _isGameOver = false;
+    private float _currentCuteness;
     private AudioSource _audioSource;
+    private bool _isDead = false;
+
+    public float CurrentCuteness => _currentCuteness;
 
     void Awake()
     {
         _audioSource = GetComponent<AudioSource>();
 
-        // Если HUD не назначен в инспекторе, пробуем найти его на сцене
-        if (hud == null)
+        // Привязка к микшеру
+        if (sfxGroup != null && _audioSource != null)
         {
-            hud = FindObjectOfType<HUD>();
+            _audioSource.outputAudioMixerGroup = sfxGroup;
         }
-    }
 
-    void Start()
-    {
-        CurrentCuteness = startCuteness;
-
-        // Инициализируем HUD значениями
-        if (hud != null)
-        {
-            hud.Initialize(maxCuteness, CurrentCuteness);
-        }
+        if (hud == null) hud = FindObjectOfType<HUD>();
     }
 
     void OnEnable()
     {
-        EnemyHealth.OnEnemyDied += OnEnemyKilled;
+        EnemyHealth.OnEnemyDied += HandleEnemyDeath;
     }
 
     void OnDisable()
     {
-        EnemyHealth.OnEnemyDied -= OnEnemyKilled;
+        EnemyHealth.OnEnemyDied -= HandleEnemyDeath;
     }
 
-    void Update()
+    void Start()
     {
-        if (_isGameOver) return;
-
-        // Пассивное накопление милоты (это усложняет игру со временем)
-        if (passiveCutenessGain > 0)
-        {
-            AddCuteness(passiveCutenessGain * Time.deltaTime, isPassive: true);
-        }
+        _currentCuteness = startCuteness;
+        if (hud != null) hud.Initialize(maxCuteness, _currentCuteness);
     }
 
-    private void OnEnemyKilled(float brutailityRestoreAmount)
+    private void HandleEnemyDeath(float points)
     {
-        if (_isGameOver) return;
-
-        RemoveCuteness(brutailityRestoreAmount);
-
-        if (restoreSound != null)
-        {
-            _audioSource.PlayOneShot(restoreSound);
-        }
+        if (_isDead) return;
+        float reductionAmount = maxCuteness * (killReductionPercent / 100f);
+        RemoveCuteness(reductionAmount);
     }
 
-    // Добавляем милоту (аналог получения урона)
-    public void AddCuteness(float amount, bool isPassive = false)
+    public void AddCuteness(float amount, bool playSound = true)
     {
-        if (_isGameOver) return;
+        if (_isDead) return;
 
-        CurrentCuteness += amount;
-        CurrentCuteness = Mathf.Clamp(CurrentCuteness, 0, maxCuteness);
+        _currentCuteness += amount;
 
-        // Обновляем UI
-        if (hud != null)
+        if (playSound && amount > 1f && hitSound != null)
+            _audioSource.PlayOneShot(hitSound);
+
+        UpdateHUD();
+
+        if (_currentCuteness >= maxCuteness)
         {
-            hud.UpdateCuteness(CurrentCuteness);
+            Die();
         }
-
-        // Звук играем только если это удар врага, а не пассивный тик
-        if (!isPassive && damageSound != null && amount > 0)
-        {
-            _audioSource.PlayOneShot(damageSound);
-        }
-
-        CheckGameOver();
     }
 
-    // Убираем милоту (лечимся, убивая врагов)
     public void RemoveCuteness(float amount)
     {
-        if (_isGameOver) return;
+        if (_isDead) return;
+        bool wasAlreadySafe = _currentCuteness <= 0.01f;
+        _currentCuteness -= amount;
+        if (_currentCuteness < 0) _currentCuteness = 0;
 
-        CurrentCuteness -= amount;
-        CurrentCuteness = Mathf.Clamp(CurrentCuteness, 0, maxCuteness);
+        if (!wasAlreadySafe && amount > 0 && healSound != null)
+            _audioSource.PlayOneShot(healSound);
 
-        // Обновляем UI
-        if (hud != null)
-        {
-            hud.UpdateCuteness(CurrentCuteness);
-        }
+        UpdateHUD();
     }
 
-    public float GetCutenessNormalized()
+    private void UpdateHUD()
     {
-        return CurrentCuteness / maxCuteness;
+        if (hud != null) hud.UpdateCuteness(_currentCuteness);
     }
 
-    private void CheckGameOver()
+    private void Die()
     {
-        if (CurrentCuteness >= maxCuteness)
-        {
-            TriggerGameOver();
-        }
-    }
-
-    private void TriggerGameOver()
-    {
-        _isGameOver = true;
-        Debug.Log("GAME OVER: Вы превратились в зайчика! Слишком мило!");
+        _isDead = true;
 
         if (gameOverSound != null)
         {
-            _audioSource.PlayOneShot(gameOverSound);
+            // Используем кастомный метод, так как объект игрока может отключиться
+            PlaySoundIndependent(gameOverSound);
         }
 
-        GetComponent<PlayerController>().enabled = false;
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.GameOver();
+        }
+        else
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        }
+    }
 
-        // Здесь можно вызвать экран проигрыша через UIManager, если он есть
-        // Example: UIManager.Instance.ShowGameOverScreen();
+    private void PlaySoundIndependent(AudioClip clip)
+    {
+        GameObject go = new GameObject("GameOverSound");
+        go.transform.position = transform.position;
+        AudioSource src = go.AddComponent<AudioSource>();
+        src.clip = clip;
+        if (sfxGroup != null) src.outputAudioMixerGroup = sfxGroup;
+        src.Play();
+        Destroy(go, clip.length);
     }
 }

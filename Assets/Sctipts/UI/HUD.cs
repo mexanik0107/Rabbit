@@ -1,101 +1,100 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
 public class HUD : MonoBehaviour
 {
-    [Header("Индикатор Милоты")]
+    [Header("Cuteness Bar")]
     public Slider cutenessSlider;
     public Image cutenessFill;
-    [Tooltip("Градиент цвета: Слева (0%) - Безопасно, Справа (100%) - Опасно")]
     public Gradient cutenessGradient;
 
-    [Header("Дополнительная информация")]
-    public Text scoreText;
-    public Text ammoText;
-    public Text waveText;
+    [Header("Ammo Info")]
+    public TMP_Text currentAmmoText;
+    public TMP_Text totalAmmoText;
 
-    [Header("Анимация получения милоты")]
-    public Animator damageAnimator; // Анимация тряски или вспышки при попадании
+    [Header("Game Info")]
+    public TMP_Text waveText;       // Сюда будет писаться "WAVE 1" или "NEXT: 5..."
+    public TMP_Text gameTimerText;  // НОВОЕ: Сюда перетащи текст общего таймера
+
+    [Header("Visual Darkening")]
+    public Gradient interfaceGradient;
+    public Image[] allHudImages;
+    public TMP_Text[] allHudTexts;
 
     private float _maxCuteness;
 
-    // Инициализация при старте игры
     public void Initialize(float maxCutenessValue, float currentCutenessValue)
     {
         _maxCuteness = maxCutenessValue;
-
         if (cutenessSlider != null)
         {
             cutenessSlider.maxValue = _maxCuteness;
             cutenessSlider.value = currentCutenessValue;
-            UpdateCutenessColor(currentCutenessValue);
         }
+        UpdateCutenessVisuals(currentCutenessValue);
     }
 
-    // Метод обновления полоски (вызывается из PlayerCuteness)
     public void UpdateCuteness(float currentCuteness)
     {
-        // Ограничиваем значение для UI
-        float clampedValue = Mathf.Clamp(currentCuteness, 0, _maxCuteness);
+        if (cutenessSlider != null) cutenessSlider.value = currentCuteness;
+        UpdateCutenessVisuals(currentCuteness);
+    }
 
-        // Запоминаем старое значение, чтобы понять, выросла ли милота
-        float oldValue = cutenessSlider != null ? cutenessSlider.value : 0;
+    private void UpdateCutenessVisuals(float currentVal)
+    {
+        float percentage = Mathf.Clamp01(currentVal / _maxCuteness);
 
-        if (cutenessSlider != null)
+        // 1. Полоска (полный цвет)
+        if (cutenessFill != null) cutenessFill.color = cutenessGradient.Evaluate(percentage);
+
+        // 2. Цвет интерфейса
+        Color targetColor = interfaceGradient.Evaluate(percentage);
+
+        // Картинки красим как обычно
+        if (allHudImages != null)
         {
-            cutenessSlider.value = clampedValue;
-            UpdateCutenessColor(clampedValue);
+            foreach (var img in allHudImages)
+            {
+                if (img != null && img != cutenessFill) img.color = targetColor;
+            }
         }
 
-        // Если милота выросла (нас ударили) -> проигрываем анимацию "урона"
-        if (damageAnimator != null && clampedValue > oldValue)
+        // ТЕКСТ: Красим только ЛИЦЕВУЮ часть (faceColor), чтобы Аутлайн остался черным!
+        if (allHudTexts != null)
         {
-            damageAnimator.SetTrigger("TakeDamage");
-        }
-    }
-
-    private void UpdateCutenessColor(float currentValue)
-    {
-        if (cutenessFill != null && cutenessGradient != null)
-        {
-            float percentage = currentValue / _maxCuteness;
-            cutenessFill.color = cutenessGradient.Evaluate(percentage);
-        }
-    }
-
-    public void Show()
-    {
-        gameObject.SetActive(true);
-    }
-
-    public void Hide()
-    {
-        gameObject.SetActive(false);
-    }
-
-    // --- Дополнительные методы ---
-
-    public void UpdateScore(int score)
-    {
-        if (scoreText != null)
-        {
-            scoreText.text = $"Очки: {score}";
+            foreach (var txt in allHudTexts)
+            {
+                if (txt != null)
+                {
+                    // faceColor принимает Color32, приведение автоматическое
+                    txt.faceColor = targetColor;
+                }
+            }
         }
     }
 
-    public void UpdateAmmo(int currentAmmo, int maxAmmo)
+    // --- Обновление информации ---
+
+    public void UpdateAmmo(int clip, int total)
     {
-        if (ammoText != null)
-        {
-            ammoText.text = $"Патроны: {currentAmmo}/{maxAmmo}";
-        }
+        if (currentAmmoText != null) currentAmmoText.text = clip.ToString();
+        if (totalAmmoText != null) totalAmmoText.text = total.ToString();
     }
 
-    public void UpdateWave(int waveNumber)
+    public void UpdateWaveText(string text)
     {
-        if (waveText != null)
+        if (waveText != null) waveText.text = text;
+    }
+
+    public void UpdateGameTimer(float timeInSeconds)
+    {
+        if (gameTimerText != null)
         {
-            waveText.text = $"Волна: {waveNumber}";
+            // Форматируем время в ММ:СС
+            int minutes = Mathf.FloorToInt(timeInSeconds / 60F);
+            int seconds = Mathf.FloorToInt(timeInSeconds - minutes * 60);
+            gameTimerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
         }
     }
-}
+}   

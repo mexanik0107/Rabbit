@@ -1,156 +1,140 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Audio;
 
+[RequireComponent(typeof(CanvasGroup))]
 public class SettingsMenu : MonoBehaviour
 {
-    [Header("Компоненты")]
-    public CanvasGroup settingsPanel;
-    public Slider volumeSlider;
+    [Header("Audio Settings")]
+    public AudioMixer mainMixer;
+    public Slider musicSlider;
+    public Slider sfxSlider;
+
+    [Header("Screen Settings")]
+    public Button fullscreenBtn;
+    public Button windowedBtn;
     public Button backButton;
-    public Toggle fullscreenToggle;
-    
+
+    [Header("Visuals")]
+    public Image fullscreenBtnImage;
+    public Image windowedBtnImage;
+    public Sprite activeSprite;
+    public Sprite inactiveSprite;
+
+    private System.Action _onBackCallback;
+    private CanvasGroup _canvasGroup;
+
+    private void Awake()
+    {
+        _canvasGroup = GetComponent<CanvasGroup>();
+        InitializeSettings();
+
+        // Подписки на события
+        if (musicSlider != null) musicSlider.onValueChanged.AddListener(SetMusicVolume);
+        if (sfxSlider != null) sfxSlider.onValueChanged.AddListener(SetSFXVolume);
+
+        // Для кнопок добавляем звуки и логику
+        SetupButton(fullscreenBtn, () => SetFullscreen(true));
+        SetupButton(windowedBtn, () => SetFullscreen(false));
+        SetupButton(backButton, CloseSettings);
+
+        if (_canvasGroup != null)
+        {
+            _canvasGroup.alpha = 1;
+            _canvasGroup.interactable = true;
+            _canvasGroup.blocksRaycasts = true;
+        }
+    }
+
+    // Вспомогательный метод чтобы вешать и логику, и звук
+    private void SetupButton(Button btn, UnityEngine.Events.UnityAction action)
+    {
+        if (btn != null)
+        {
+            btn.onClick.AddListener(action);
+            // Автоматически вешаем скрипт звука, если его нет
+            if (btn.GetComponent<UIButtonSound>() == null)
+                btn.gameObject.AddComponent<UIButtonSound>();
+        }
+    }
+
     private void Start()
     {
-        InitializeComponents();
-        LoadSettings();
-        Hide(); // Скрываем при старте
+        ApplyCurrentSettings();
     }
-    
-    private void InitializeComponents()
+
+    private void InitializeSettings()
     {
-        // Слайдер громкости
-        if (volumeSlider != null)
-        {
-            volumeSlider.onValueChanged.AddListener(OnVolumeChanged);
-        }
-        
-        // Кнопка назад
-        if (backButton != null)
-        {
-            backButton.onClick.RemoveAllListeners();
-            backButton.onClick.AddListener(() =>
-            {
-                PlaySound();
-                Hide();
-            });
-        }
-        
-        // Переключатель полноэкранного режима
-        if (fullscreenToggle != null)
-        {
-            fullscreenToggle.onValueChanged.AddListener(OnFullscreenChanged);
-        }
+        float savedMusic = PlayerPrefs.GetFloat("MusicVol", 0.75f);
+        float savedSFX = PlayerPrefs.GetFloat("SFXVol", 0.75f);
+
+        if (musicSlider != null) musicSlider.value = savedMusic;
+        if (sfxSlider != null) sfxSlider.value = savedSFX;
+
+        bool isFull = PlayerPrefs.GetInt("FullscreenState", Screen.fullScreen ? 1 : 0) == 1;
+        UpdateScreenButtons(isFull);
     }
-    
-    public void Show()
+
+    private void ApplyCurrentSettings()
     {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.ShowCanvasGroup(settingsPanel);
-            UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
-        }
-        else if (settingsPanel != null)
-        {
-            settingsPanel.alpha = 1;
-            settingsPanel.interactable = true;
-            settingsPanel.blocksRaycasts = true;
-        }
-        
-        LoadSettings();
+        if (musicSlider != null) SetMusicVolume(musicSlider.value);
+        if (sfxSlider != null) SetSFXVolume(sfxSlider.value);
     }
-    
-    public void Hide()
+
+    public void SetMusicVolume(float value)
     {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.HideCanvasGroup(settingsPanel);
-            UIManager.Instance.PlaySound(UIManager.Instance.menuCloseSound);
-        }
-        else if (settingsPanel != null)
-        {
-            settingsPanel.alpha = 0;
-            settingsPanel.interactable = false;
-            settingsPanel.blocksRaycasts = false;
-        }
-        
-        SaveSettings();
-        
-        // Возвращаемся к предыдущему меню
-        ReturnToPreviousMenu();
+        PlayerPrefs.SetFloat("MusicVol", value);
+        if (mainMixer == null) return;
+        float dB = Mathf.Log10(Mathf.Clamp(value, 0.0001f, 1f)) * 20;
+        mainMixer.SetFloat("MusicVol", dB);
     }
-    
-    private void LoadSettings()
+
+    public void SetSFXVolume(float value)
     {
-        // Громкость
-        if (volumeSlider != null)
-        {
-            float volume = PlayerPrefs.GetFloat("MasterVolume", 1f);
-            volumeSlider.value = volume;
-            ApplyVolume(volume);
-        }
-        
-        // Полноэкранный режим
-        if (fullscreenToggle != null)
-        {
-            bool isFullscreen = PlayerPrefs.GetInt("Fullscreen", 1) == 1;
-            fullscreenToggle.isOn = isFullscreen;
-            Screen.fullScreen = isFullscreen;
-        }
+        PlayerPrefs.SetFloat("SFXVol", value);
+        if (mainMixer == null) return;
+        float dB = Mathf.Log10(Mathf.Clamp(value, 0.0001f, 1f)) * 20;
+        mainMixer.SetFloat("SFXVol", dB);
     }
-    
-    private void SaveSettings()
-    {
-        // Сохраняем громкость
-        if (volumeSlider != null)
-        {
-            PlayerPrefs.SetFloat("MasterVolume", volumeSlider.value);
-        }
-        
-        // Сохраняем настройки полноэкранного режима
-        if (fullscreenToggle != null)
-        {
-            PlayerPrefs.SetInt("Fullscreen", fullscreenToggle.isOn ? 1 : 0);
-        }
-        
-        PlayerPrefs.Save();
-    }
-    
-    private void OnVolumeChanged(float volume)
-    {
-        ApplyVolume(volume);
-    }
-    
-    private void ApplyVolume(float volume)
-    {
-        AudioListener.volume = volume;
-    }
-    
-    private void OnFullscreenChanged(bool isFullscreen)
+
+    public void SetFullscreen(bool isFullscreen)
     {
         Screen.fullScreen = isFullscreen;
+        PlayerPrefs.SetInt("FullscreenState", isFullscreen ? 1 : 0);
+        UpdateScreenButtons(isFullscreen);
     }
-    
-    private void ReturnToPreviousMenu()
+
+    private void UpdateScreenButtons(bool isFullscreen)
     {
-        // Находим главное меню или меню паузы в сцене
-        MainMenu mainMenu = FindObjectOfType<MainMenu>();
-        PauseMenu pauseMenu = FindObjectOfType<PauseMenu>();
-        
-        if (mainMenu != null)
+        if (activeSprite != null && inactiveSprite != null)
         {
-            mainMenu.Show();
-        }
-        else if (pauseMenu != null)
-        {
-            pauseMenu.Show();
+            if (fullscreenBtnImage != null) fullscreenBtnImage.sprite = isFullscreen ? activeSprite : inactiveSprite;
+            if (windowedBtnImage != null) windowedBtnImage.sprite = !isFullscreen ? activeSprite : inactiveSprite;
         }
     }
-    
-    private void PlaySound()
+
+    public void Open(System.Action onBackAction)
     {
+        _onBackCallback = onBackAction;
+        gameObject.SetActive(true);
+        if (_canvasGroup != null)
+        {
+            _canvasGroup.alpha = 1f;
+            _canvasGroup.interactable = true;
+            _canvasGroup.blocksRaycasts = true;
+        }
+        ApplyCurrentSettings();
+    }
+
+    public void CloseSettings()
+    {
+        // --- ЗВУК ЗАКРЫТИЯ ---
         if (UIManager.Instance != null)
-        {
-            UIManager.Instance.PlaySound(UIManager.Instance.buttonClickSound);
-        }
+            UIManager.Instance.PlaySound(UIManager.Instance.menuCloseSound);
+        // ---------------------
+
+        PlayerPrefs.Save();
+        gameObject.SetActive(false);
+        _onBackCallback?.Invoke();
     }
 }

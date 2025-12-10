@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 public class PauseMenu : MonoBehaviour
 {
@@ -8,156 +9,159 @@ public class PauseMenu : MonoBehaviour
     public Button resumeButton;
     public Button settingsButton;
     public Button mainMenuButton;
-    
+
     [Header("Настройки")]
     public SettingsMenu settingsMenu;
-    
+
     private bool isPaused = false;
-    
+    private const string MENU_SCENE_NAME = "MenuScene";
+
     private void Start()
     {
         InitializeButtons();
         Hide();
+
+        // Гарантируем, что настройки скрыты при старте
+        if (settingsMenu != null) settingsMenu.gameObject.SetActive(false);
     }
-    
+
     private void InitializeButtons()
     {
-        // Кнопка "Продолжить"
+        // 1. Resume Button
         if (resumeButton != null)
         {
-            resumeButton.onClick.RemoveAllListeners();
-            resumeButton.onClick.AddListener(() =>
-            {
-                PlaySound();
-                ResumeGame();
-            });
+            resumeButton.onClick.AddListener(ResumeGame);
+            // Авто-добавление звука клика
+            if (resumeButton.GetComponent<UIButtonSound>() == null)
+                resumeButton.gameObject.AddComponent<UIButtonSound>();
         }
-        
-        // Кнопка "Настройки"
+
+        // 2. Settings Button
         if (settingsButton != null)
         {
-            settingsButton.onClick.RemoveAllListeners();
-            settingsButton.onClick.AddListener(() =>
-            {
-                PlaySound();
-                ShowSettings();
-            });
+            settingsButton.onClick.AddListener(OpenSettings);
+            if (settingsButton.GetComponent<UIButtonSound>() == null)
+                settingsButton.gameObject.AddComponent<UIButtonSound>();
         }
-        
-        // Кнопка "Выход в главное меню"
+
+        // 3. Main Menu Button
         if (mainMenuButton != null)
         {
-            mainMenuButton.onClick.RemoveAllListeners();
-            mainMenuButton.onClick.AddListener(() =>
-            {
-                PlaySound();
-                ReturnToMainMenu();
-            });
+            mainMenuButton.onClick.AddListener(ReturnToMainMenu);
+            if (mainMenuButton.GetComponent<UIButtonSound>() == null)
+                mainMenuButton.gameObject.AddComponent<UIButtonSound>();
         }
     }
-    
+
     private void Update()
     {
-        // Обработка ESC только в игровой сцене
+        // Если Game Over, пауза не работает
+        if (GameManager.Instance != null && !GameManager.Instance.IsGameActive) return;
+
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            TogglePause();
+            // ПРИОРИТЕТ 1: Закрываем настройки, если они открыты
+            if (settingsMenu != null && settingsMenu.gameObject.activeSelf)
+            {
+                settingsMenu.CloseSettings();
+            }
+            // ПРИОРИТЕТ 2: Переключаем паузу
+            else
+            {
+                TogglePause();
+            }
         }
     }
-    
+
     private void TogglePause()
     {
-        if (isPaused)
-        {
-            ResumeGame();
-        }
-        else
-        {
-            Show();
-        }
+        if (isPaused) ResumeGame();
+        else Show();
     }
-    
+
     public void Show()
     {
+        // Звук открытия паузы
         if (UIManager.Instance != null)
-        {
-            UIManager.Instance.ShowCanvasGroup(pauseMenuPanel);
             UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
-        }
-        else if (pauseMenuPanel != null)
+
+        if (pauseMenuPanel != null)
         {
             pauseMenuPanel.alpha = 1;
             pauseMenuPanel.interactable = true;
             pauseMenuPanel.blocksRaycasts = true;
         }
-        
         PauseGame();
     }
-    
+
     public void Hide()
     {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.HideCanvasGroup(pauseMenuPanel);
-            UIManager.Instance.PlaySound(UIManager.Instance.menuCloseSound);
-        }
-        else if (pauseMenuPanel != null)
+        if (pauseMenuPanel != null)
         {
             pauseMenuPanel.alpha = 0;
             pauseMenuPanel.interactable = false;
             pauseMenuPanel.blocksRaycasts = false;
         }
-        
         ResumeGameTime();
     }
-    
+
     public void ResumeGame()
     {
+        // Звук закрытия паузы (резюм)
+        // Проверяем isPaused, чтобы звук не играл при старте игры (когда Hide вызывается в Start)
+        if (isPaused && UIManager.Instance != null)
+            UIManager.Instance.PlaySound(UIManager.Instance.menuCloseSound);
+
         Hide();
     }
-    
-    public void ShowSettings()
+
+    public void OpenSettings()
     {
-        Hide();
+        // --- ВОТ ЭТО БЫЛО ПРОПУЩЕНО ---
+        // Играем звук открытия меню
+        if (UIManager.Instance != null)
+            UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
+        // ------------------------------
+
+        // Скрываем паузу визуально (но время стоит)
+        if (pauseMenuPanel != null)
+        {
+            pauseMenuPanel.alpha = 0;
+            pauseMenuPanel.interactable = false;
+            pauseMenuPanel.blocksRaycasts = false;
+        }
+
         if (settingsMenu != null)
         {
-            settingsMenu.Show();
+            settingsMenu.Open(() =>
+            {
+                // Callback: когда настройки закроются, снова показываем панель паузы
+                if (pauseMenuPanel != null)
+                {
+                    pauseMenuPanel.alpha = 1;
+                    pauseMenuPanel.interactable = true;
+                    pauseMenuPanel.blocksRaycasts = true;
+                }
+            });
         }
     }
-    
+
     private void ReturnToMainMenu()
     {
-        // Сбрасываем паузу
         ResumeGameTime();
-        
-        // Загружаем меню
-        if (SceneLoader.Instance != null)
-        {
-            SceneLoader.Instance.LoadScene("MenuScene");
-        }
-        else
-        {
-            UnityEngine.SceneManagement.SceneManager.LoadScene("MenuScene");
-        }
+        if (SceneLoader.Instance != null) SceneLoader.Instance.LoadScene(MENU_SCENE_NAME);
+        else SceneManager.LoadScene(MENU_SCENE_NAME);
     }
-    
+
     private void PauseGame()
     {
         Time.timeScale = 0f;
         isPaused = true;
     }
-    
+
     private void ResumeGameTime()
     {
         Time.timeScale = 1f;
         isPaused = false;
-    }
-    
-    private void PlaySound()
-    {
-        if (UIManager.Instance != null)
-        {
-            UIManager.Instance.PlaySound(UIManager.Instance.buttonClickSound);
-        }
     }
 }
