@@ -5,17 +5,17 @@ using System.Linq;
 
 public class WaveManager : MonoBehaviour
 {
-    [Header("Spawn Settings")]
+    [Header("Точки спавна")]
     public List<Transform> allSpawnPoints;
-    public int activeSpawnersCount = 3;
+    public int activeSpawnersCount = 3; // Сколько точек активно в одну волну
     public bool randomizeSpawnersEveryWave = true;
 
-    [Header("Wave Progression")]
-    public float countMultiplier = 1.2f;
+    [Header("Прогрессия")]
+    public float countMultiplier = 1.2f; // На сколько умножать кол-во врагов каждую волну
     public float timeBetweenWaves = 5f;
-    public float spawnRate = 1f;
+    public float spawnRate = 1f; // Задержка между появлением отдельных врагов
 
-    [Header("Enemies Configuration")]
+    [Header("Конфигурация врагов")]
     public List<EnemyWaveConfig> enemyConfigs;
 
     private int _currentWaveIndex = 0;
@@ -40,6 +40,7 @@ public class WaveManager : MonoBehaviour
 
     void OnEnable()
     {
+        // Подписываемся на смерть любого врага
         EnemyHealth.OnEnemyDied += OnEnemyKilled;
     }
 
@@ -52,6 +53,7 @@ public class WaveManager : MonoBehaviour
     {
         if (_enemiesAlive > 0) _enemiesAlive--;
 
+        // Если враги кончились и спавн завершен -> конец волны
         if (_enemiesAlive <= 0 && !_isSpawning && !_waitingForNextWave)
         {
             EndWave();
@@ -71,21 +73,19 @@ public class WaveManager : MonoBehaviour
     {
         _waitingForNextWave = true;
 
-        // --- НОВАЯ ЛОГИКА ТАЙМЕРА ОБРАТНОГО ОТСЧЕТА ---
+        // Обратный отсчет перед следующей волной
         float timer = timeBetweenWaves;
 
         while (timer > 0)
         {
-            // Обновляем текст в HUD (например: "NEXT WAVE: 3...")
             if (_hud != null)
             {
                 _hud.UpdateWaveText($"NEXT: {Mathf.CeilToInt(timer)}");
             }
 
             timer -= Time.deltaTime;
-            yield return null; // Ждем следующий кадр
+            yield return null;
         }
-        // -----------------------------------------------
 
         _waitingForNextWave = false;
         _currentWaveIndex++;
@@ -95,7 +95,6 @@ public class WaveManager : MonoBehaviour
             GameManager.Instance.OnWaveStarted(_currentWaveIndex);
         }
 
-        // Возвращаем нормальный текст волны
         if (_hud != null)
         {
             _hud.UpdateWaveText($"WAVE {_currentWaveIndex}");
@@ -108,6 +107,8 @@ public class WaveManager : MonoBehaviour
     {
         _isSpawning = true;
         SelectActiveSpawners();
+
+        // Генерируем список врагов, которых нужно заспавнить в этой волне
         List<GameObject> spawnQueue = GenerateSpawnQueue();
         _enemiesAlive = spawnQueue.Count;
 
@@ -124,6 +125,7 @@ public class WaveManager : MonoBehaviour
         _isSpawning = false;
     }
 
+    // Выбирает подмножество точек спавна
     private void SelectActiveSpawners()
     {
         if (!randomizeSpawnersEveryWave || activeSpawnersCount <= 0 || activeSpawnersCount >= allSpawnPoints.Count)
@@ -132,10 +134,12 @@ public class WaveManager : MonoBehaviour
         }
         else
         {
+            // Перемешиваем список и берем первые N элементов (LINQ)
             _currentWaveSpawners = allSpawnPoints.OrderBy(x => Random.value).Take(activeSpawnersCount).ToList();
         }
     }
 
+    // Рассчитывает кол-во врагов по формуле прогрессии
     private List<GameObject> GenerateSpawnQueue()
     {
         List<GameObject> queue = new List<GameObject>();
@@ -147,6 +151,7 @@ public class WaveManager : MonoBehaviour
             for (int i = 0; i < countToSpawn; i++) queue.Add(config.enemyPrefab);
         }
 
+        // Перемешиваем очередь (алгоритм Фишера-Йейтса), чтобы враги разных типов шли вперемешку
         for (int i = 0; i < queue.Count; i++)
         {
             GameObject temp = queue[i];
@@ -170,5 +175,5 @@ public class EnemyWaveConfig
 {
     public string name = "Enemy Type";
     public GameObject enemyPrefab;
-    public int baseCount = 5;
-}   
+    public int baseCount = 5; // Базовое количество на 1-й волне
+}

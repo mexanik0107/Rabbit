@@ -1,40 +1,43 @@
 ﻿using UnityEngine;
 using UnityEditor;
 
-// Этот класс создает свое собственное окно в Unity
+// Этот класс наследуется от EditorWindow, что позволяет создавать свои окна внутри Unity.
 public class AudioDashboard : EditorWindow
 {
-    // Ссылки на префабы, из которых мы будем тянуть настройки
+    // Ссылки на префабы Игрока и Врага, настройки которых мы хотим менять.
     private GameObject _playerPrefab;
     private GameObject _enemyPrefab;
 
-    // Скроллбар для окна, если настроек будет слишком много
+    // Позиция прокрутки (нужна, если настроек станет слишком много и они не влезут в окно).
     private Vector2 _scrollPos;
 
-    // Пункт меню, чтобы открыть окно
+    // Этот атрибут добавляет пункт в верхнее меню Unity: Tools -> Audio Dashboard.
     [MenuItem("Tools/Audio Dashboard 🎧")]
     public static void ShowWindow()
     {
+        // Создает или фокусирует существующее окно.
         GetWindow<AudioDashboard>("Audio Config");
     }
 
+    // OnGUI — это метод, который отрисовывает интерфейс окна (кнопки, поля и т.д.).
     void OnGUI()
     {
-        // Красивый заголовок
         GUILayout.Label("Центр управления звуком", EditorStyles.boldLabel);
         EditorGUILayout.Space();
 
-        // Поля для перетаскивания префабов
-        GUILayout.Label("1. Перетащи сюда свои префабы (из папки Project):", EditorStyles.helpBox);
+        // Блок выбора префабов
+        GUILayout.Label("1. Перетащи сюда префабы из папки Project:", EditorStyles.helpBox);
+        // ObjectField позволяет перетаскивать объекты Unity в поле.
         _playerPrefab = (GameObject)EditorGUILayout.ObjectField("Player Prefab", _playerPrefab, typeof(GameObject), false);
         _enemyPrefab = (GameObject)EditorGUILayout.ObjectField("Enemy Prefab", _enemyPrefab, typeof(GameObject), false);
 
         EditorGUILayout.Space();
         GUILayout.Label("2. Настройки звуков:", EditorStyles.boldLabel);
 
-        // Начало зоны прокрутки
+        // Начинаем зону прокрутки
         _scrollPos = EditorGUILayout.BeginScrollView(_scrollPos);
 
+        // Если префаб игрока назначен, рисуем его настройки
         if (_playerPrefab != null)
         {
             DrawPlayerAudioSettings();
@@ -45,9 +48,10 @@ public class AudioDashboard : EditorWindow
         }
 
         EditorGUILayout.Space();
-        DrawLine();
+        DrawLine(); // Рисуем разделитель
         EditorGUILayout.Space();
 
+        // Если префаб врага назначен, рисуем его настройки
         if (_enemyPrefab != null)
         {
             DrawEnemyAudioSettings();
@@ -64,26 +68,26 @@ public class AudioDashboard : EditorWindow
     {
         GUILayout.Label($"Настройки Игрока ({_playerPrefab.name})", EditorStyles.boldLabel);
 
-        // --- Блок 1: PlayerController (Шаги) ---
+        // Попытка получить компонент PlayerController
         var playerController = _playerPrefab.GetComponent<PlayerController>();
         if (playerController != null)
         {
-            // Создаем "обертку" SerializedObject, чтобы изменения сохранялись корректно (с поддержкой Ctrl+Z)
+            // SerializedObject позволяет безопасно менять данные (работает Ctrl+Z и сохранение префаба).
             SerializedObject so = new SerializedObject(playerController);
-            so.Update(); // Обновляем данные
+            so.Update(); // Синхронизируем данные
 
             EditorGUILayout.LabelField("Движение (PlayerController)", EditorStyles.miniBoldLabel);
 
-            // Отрисовываем конкретные свойства
+            // Отрисовываем поля скрипта PlayerController
             EditorGUILayout.PropertyField(so.FindProperty("footstepSounds"), new GUIContent("Звуки шагов"), true);
             EditorGUILayout.PropertyField(so.FindProperty("stepInterval"), new GUIContent("Интервал шага (сек)"));
 
-            so.ApplyModifiedProperties(); // Применяем изменения
+            so.ApplyModifiedProperties(); // Применяем изменения обратно в префаб
         }
 
         EditorGUILayout.Space();
 
-        // --- Блок 2: PlayerCuteness (Геймплей) ---
+        // Попытка получить компонент PlayerCuteness
         var playerCuteness = _playerPrefab.GetComponent<PlayerCuteness>();
         if (playerCuteness != null)
         {
@@ -104,7 +108,7 @@ public class AudioDashboard : EditorWindow
     {
         GUILayout.Label($"Настройки Врага ({_enemyPrefab.name})", EditorStyles.boldLabel);
 
-        // --- Блок 1: EnemyAI (Атака) ---
+        // Настройки AI врага
         var enemyAI = _enemyPrefab.GetComponent<EnemyAI>();
         if (enemyAI != null)
         {
@@ -119,7 +123,7 @@ public class AudioDashboard : EditorWindow
 
         EditorGUILayout.Space();
 
-        // --- Блок 2: EnemyHealth (Получение урона) ---
+        // Настройки здоровья врага
         var enemyHealth = _enemyPrefab.GetComponent<EnemyHealth>();
         if (enemyHealth != null)
         {
@@ -134,7 +138,7 @@ public class AudioDashboard : EditorWindow
         }
     }
 
-    // Вспомогательный метод для рисования разделительной линии
+    // Вспомогательный метод для рисования серой линии-разделителя
     private void DrawLine()
     {
         Rect rect = EditorGUILayout.GetControlRect(false, 1);

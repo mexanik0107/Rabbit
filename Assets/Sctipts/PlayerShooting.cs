@@ -5,30 +5,30 @@ using UnityEngine.Audio;
 
 public class PlayerShooting : MonoBehaviour
 {
-    [Header("References")]
+    [Header("Ссылки")]
     public GameObject bulletPrefab;
-    public Transform firePoint;
+    public Transform firePoint; // Точка вылета пули
     public HUD hud;
 
-    [Header("Audio")]
-    // Перетащи сюда группу SFX
+    [Header("Аудио")]
     public AudioMixerGroup sfxGroup;
     public AudioClip shootSound;
     public AudioClip reloadSound;
     public AudioClip emptyClickSound;
 
-    [Header("Weapon Stats")]
+    [Header("Характеристики оружия")]
     public float damage = 2f;
     public float bulletSpeed = 20f;
-    public float fireRate = 0.2f;
-    public float spreadAngle = 5f;
+    public float fireRate = 0.2f; // Задержка между выстрелами
+    public float spreadAngle = 5f; // Разброс пуль
 
-    [Header("Ammo Settings")]
+    [Header("Патроны")]
     public int maxMagazineSize = 10;
     public int maxTotalAmmo = 60;
     public int startTotalAmmo = 30;
     public float reloadTime = 1.5f;
 
+    // Свойства для чтения извне (например, UI)
     public int CurrentClip { get; private set; }
     public int CurrentTotalAmmo { get; private set; }
     public bool IsReloading { get; private set; }
@@ -41,7 +41,6 @@ public class PlayerShooting : MonoBehaviour
         _audioSource = GetComponent<AudioSource>();
         if (_audioSource == null) _audioSource = gameObject.AddComponent<AudioSource>();
 
-        // Привязываем к микшеру
         if (sfxGroup != null)
         {
             _audioSource.outputAudioMixerGroup = sfxGroup;
@@ -61,12 +60,14 @@ public class PlayerShooting : MonoBehaviour
     {
         if (IsReloading) return;
 
+        // Ручная перезарядка на R
         if (Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
         {
             StartReload();
             return;
         }
 
+        // Стрельба на ЛКМ
         if (Mouse.current != null && Mouse.current.leftButton.isPressed)
         {
             if (Time.time >= _nextFireTime)
@@ -82,7 +83,7 @@ public class PlayerShooting : MonoBehaviour
         if (CurrentClip <= 0)
         {
             if (CurrentTotalAmmo > 0) StartReload();
-            else PlaySound(emptyClickSound);
+            else PlaySound(emptyClickSound); // Клик, если совсем нет патронов
             return;
         }
 
@@ -93,11 +94,14 @@ public class PlayerShooting : MonoBehaviour
     {
         if (bulletPrefab == null || firePoint == null) return;
 
+        // Расчет случайного угла разброса
         float randomSpread = Random.Range(-spreadAngle, spreadAngle);
         Quaternion finalRotation = firePoint.rotation * Quaternion.Euler(0, 0, randomSpread);
 
+        // Создаем пулю
         GameObject bulletObj = Instantiate(bulletPrefab, firePoint.position, finalRotation);
 
+        // Передаем параметры в скрипт пули
         Projectile projectile = bulletObj.GetComponent<Projectile>();
         if (projectile != null)
         {
@@ -113,8 +117,8 @@ public class PlayerShooting : MonoBehaviour
     public void StartReload()
     {
         if (IsReloading) return;
-        if (CurrentClip == maxMagazineSize) return;
-        if (CurrentTotalAmmo <= 0) return;
+        if (CurrentClip == maxMagazineSize) return; // Магазин полон
+        if (CurrentTotalAmmo <= 0) return; // Нет запаса
 
         StartCoroutine(ReloadRoutine());
     }
@@ -126,6 +130,7 @@ public class PlayerShooting : MonoBehaviour
 
         yield return new WaitForSeconds(reloadTime);
 
+        // Математика перезарядки: сколько нужно vs сколько есть
         int ammoNeeded = maxMagazineSize - CurrentClip;
         int ammoToReload = Mathf.Min(ammoNeeded, CurrentTotalAmmo);
 
@@ -143,6 +148,7 @@ public class PlayerShooting : MonoBehaviour
 
         UpdateAmmoUI();
 
+        // Если магазин был пуст, автоматически начинаем перезарядку
         if (CurrentClip == 0) StartReload();
     }
 

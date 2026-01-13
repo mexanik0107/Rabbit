@@ -5,15 +5,15 @@ using UnityEngine.Audio;
 [RequireComponent(typeof(AudioSource))]
 public class EnemyHealth : MonoBehaviour
 {
-    [Header("Settings")]
+    [Header("Настройки")]
     public float maxHealth = 10f;
 
-    [Header("Audio")]
-    // Перетащи сюда группу SFX в префабе врага
+    [Header("Аудио")]
     public AudioMixerGroup sfxGroup;
     public AudioClip hitSound;
     public AudioClip deathSound;
 
+    // Статическое событие, на которое может подписаться кто угодно (например, WaveManager или PlayerCuteness)
     public static event Action<float> OnEnemyDied;
 
     private float _currentHealth;
@@ -23,7 +23,6 @@ public class EnemyHealth : MonoBehaviour
     {
         _audioSource = GetComponent<AudioSource>();
 
-        // Привязываем основной источник звука (для получения урона) к микшеру
         if (sfxGroup != null && _audioSource != null)
         {
             _audioSource.outputAudioMixerGroup = sfxGroup;
@@ -52,16 +51,19 @@ public class EnemyHealth : MonoBehaviour
 
     private void Die()
     {
+        // Проверяем, есть ли компонент для выпадения лута
         if (TryGetComponent(out LootDropper looter))
         {
             looter.TryDropLoot();
         }
 
+        // Сообщаем всем подписчикам, что враг умер (передаем очки, например 5)
         OnEnemyDied?.Invoke(5f);
 
         if (deathSound != null)
         {
-            // Создаем временный звук с привязкой к микшеру
+            // Используем PlaySoundAndDestroy, так как этот объект (gameObject) сейчас будет уничтожен,
+            // и обычный AudioSource прервется.
             PlaySoundAndDestroy(deathSound, transform.position);
         }
 

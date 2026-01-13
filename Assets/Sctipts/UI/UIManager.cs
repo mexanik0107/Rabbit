@@ -6,7 +6,6 @@ public class UIManager : MonoBehaviour
     public static UIManager Instance { get; private set; }
 
     [Header("Аудио")]
-    // Перетащи сюда группу SFX в префабе UI
     public AudioMixerGroup sfxGroup;
     public AudioSource uiAudioSource;
     public AudioClip buttonClickSound;
@@ -20,7 +19,6 @@ public class UIManager : MonoBehaviour
             Instance = this;
         }
 
-        // Привязываем к микшеру
         if (sfxGroup != null && uiAudioSource != null)
         {
             uiAudioSource.outputAudioMixerGroup = sfxGroup;
@@ -35,6 +33,7 @@ public class UIManager : MonoBehaviour
         }
     }
 
+    // Методы для удобного переключения CanvasGroup
     public void ShowCanvasGroup(CanvasGroup canvasGroup)
     {
         if (canvasGroup != null)

@@ -5,29 +5,28 @@ using System.Collections.Generic;
 public class WorldItemSpawner : MonoBehaviour
 {
     [Header("Что спавним")]
-    public GameObject itemPrefab; // Префаб коробки с патронами (AmmoPickup)
+    public GameObject itemPrefab; // Префаб (например, аптечка или патроны)
 
     [Header("Где спавним")]
-    [Tooltip("Список точек, где могут появиться предметы. Можно перетащить сюда те же точки, что и в WaveManager.")]
-    public List<Transform> spawnPoints;
+    public List<Transform> spawnPoints; // Список точек на карте
 
     [Header("Настройки времени")]
-    public float minSpawnInterval = 10f; // Мин. время между спавнами
-    public float maxSpawnInterval = 20f; // Макс. время
+    public float minSpawnInterval = 10f;
+    public float maxSpawnInterval = 20f;
 
     [Header("Настройки количества")]
-    [Tooltip("Максимальное количество коробок, лежащих на карте одновременно. Чтобы не замусорить уровень.")]
-    public int maxItemsOnMap = 5;
+    public int maxItemsOnMap = 5; // Лимит, чтобы не завалить всю карту предметами
 
     [Header("Настройки лута")]
     public int minAmmoInBox = 5;
     public int maxAmmoInBox = 15;
 
-    // Список для отслеживания созданных коробок
+    // Список для хранения ссылок на уже созданные предметы
     private List<GameObject> _spawnedItems = new List<GameObject>();
 
     void Start()
     {
+        // Проверки на ошибки конфигурации
         if (spawnPoints == null || spawnPoints.Count == 0)
         {
             Debug.LogWarning("WorldItemSpawner: Не назначены точки спавна!");
@@ -42,27 +41,28 @@ public class WorldItemSpawner : MonoBehaviour
             return;
         }
 
+        // Запускаем бесконечный процесс спавна
         StartCoroutine(SpawnRoutine());
     }
 
+    // Корутина — это метод, выполнение которого можно приостанавливать (yield return).
     private IEnumerator SpawnRoutine()
     {
-        // Небольшая задержка перед первым спавном
+        // Ждем перед первым спавном
         yield return new WaitForSeconds(Random.Range(minSpawnInterval, maxSpawnInterval));
 
-        while (true)
+        while (true) // Бесконечный цикл
         {
-            // 1. Очистка списка (удаляем из него ссылки на коробки, которые игрок уже подобрал)
-            // RemoveAll проверяет каждый элемент: если он null (уничтожен), удаляет из списка.
+            // Удаляем из списка "пустые" ссылки (предметы, которые игрок уже подобрал/уничтожил)
             _spawnedItems.RemoveAll(item => item == null);
 
-            // 2. Проверка лимита
+            // Если на карте меньше предметов, чем лимит — создаем новый
             if (_spawnedItems.Count < maxItemsOnMap)
             {
                 SpawnItem();
             }
 
-            // 3. Ждем до следующего раза
+            // Ждем случайное время перед следующей попыткой
             float waitTime = Random.Range(minSpawnInterval, maxSpawnInterval);
             yield return new WaitForSeconds(waitTime);
         }
@@ -70,20 +70,20 @@ public class WorldItemSpawner : MonoBehaviour
 
     private void SpawnItem()
     {
-        // Выбираем случайную точку
+        // Выбираем случайную точку из списка
         Transform randomPoint = spawnPoints[Random.Range(0, spawnPoints.Count)];
 
         // Создаем предмет
         GameObject newItem = Instantiate(itemPrefab, randomPoint.position, Quaternion.identity);
 
-        // Настраиваем количество патронов внутри
+        // Настраиваем его (если это патроны)
         AmmoPickup pickupScript = newItem.GetComponent<AmmoPickup>();
         if (pickupScript != null)
         {
             pickupScript.ammoAmount = Random.Range(minAmmoInBox, maxAmmoInBox + 1);
         }
 
-        // Добавляем в список отслеживания
+        // Запоминаем созданный предмет
         _spawnedItems.Add(newItem);
     }
 }

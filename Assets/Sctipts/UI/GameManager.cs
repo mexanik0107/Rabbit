@@ -2,20 +2,19 @@ using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
+    // Singleton: статический доступ к экземпляру класса откуда угодно (GameManager.Instance)
     public static GameManager Instance { get; private set; }
 
-    [Header("Game State")]
+    [Header("Состояние игры")]
     public float totalSurvivalTime;
     public int currentScore;
     public int wavesSurvived;
 
-    [Header("Score Settings")]
+    [Header("Настройки очков")]
     public int baseScorePerWave = 100;
     public float timeBonusCoefficient = 2000f;
 
-    // --- НОВОЕ: Публичное свойство для чтения состояния ---
     public bool IsGameActive => _isGameActive;
-    // -----------------------------------------------------
 
     private bool _isGameActive = true;
     private float _waveStartTime;
@@ -23,6 +22,7 @@ public class GameManager : MonoBehaviour
 
     void Awake()
     {
+        // Реализация синглтона
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
 
@@ -58,11 +58,14 @@ public class GameManager : MonoBehaviour
     public void OnWaveCompleted(int waveIndex)
     {
         wavesSurvived = waveIndex;
+
+        // Расчет бонуса за скорость прохождения
         float waveDuration = Time.time - _waveStartTime;
-        waveDuration = Mathf.Max(waveDuration, 1f);
+        waveDuration = Mathf.Max(waveDuration, 1f); // Защита от деления на ноль
 
         int wavePoints = waveIndex * baseScorePerWave;
         int timeBonus = Mathf.RoundToInt(timeBonusCoefficient / waveDuration);
+
         currentScore += wavePoints + timeBonus;
     }
 
@@ -72,12 +75,13 @@ public class GameManager : MonoBehaviour
 
         _isGameActive = false;
 
-        GameOverMenu gameOverMenu = FindObjectOfType<GameOverMenu>(true);
+        // Показываем экран проигрыша
+        GameOverMenu gameOverMenu = FindObjectOfType<GameOverMenu>(true); // true значит искать и среди выключенных объектов
         if (gameOverMenu != null)
         {
             gameOverMenu.Show(currentScore, totalSurvivalTime, wavesSurvived);
         }
 
-        Time.timeScale = 0f;
+        Time.timeScale = 0f; // Останавливаем время
     }
 }

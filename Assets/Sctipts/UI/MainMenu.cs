@@ -30,6 +30,7 @@ public class MainMenu : MonoBehaviour
 
     private void Update()
     {
+        // Закрытие настроек по Escape
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             if (settingsMenu != null && settingsMenu.gameObject.activeSelf)
@@ -47,7 +48,8 @@ public class MainMenu : MonoBehaviour
                 if (SceneLoader.Instance != null) SceneLoader.Instance.LoadScene(GAME_SCENE_NAME);
                 else SceneManager.LoadScene(GAME_SCENE_NAME);
             });
-            // Добавляем компонент звука программно, если забыли в редакторе (для надежности)
+
+            // Защита от дурака: добавляем звук кнопке, если забыли в редакторе
             if (playButton.GetComponent<UIButtonSound>() == null) playButton.gameObject.AddComponent<UIButtonSound>();
         }
 
@@ -68,13 +70,12 @@ public class MainMenu : MonoBehaviour
     {
         if (settingsMenu == null) return;
 
-        // --- ЗВУК ОТКРЫТИЯ ---
         if (UIManager.Instance != null)
             UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
-        // ---------------------
 
         Hide();
 
+        // Передаем Action (лямбда-выражение), который выполнится при нажатии кнопки "Назад" в настройках
         settingsMenu.Open(onBackAction: () => {
             this.Show();
         });

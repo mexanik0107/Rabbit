@@ -183,7 +183,7 @@ MonoBehaviour:
   rotationSpeed: 10
   attackRange: 1.5
   attackCooldown: 1
-  cutenessDamage: 10
+  cutenessDamage: 30
   sfxGroup: {fileID: 4694438467389381592, guid: 0ddea127dafa66941a101985be077c4e, type: 2}
   attackSound: {fileID: 0}
   jumpSound: {fileID: 8300000, guid: 2c44040f13d8cd543807fde117fb24ef, type: 3}

@@ -1,53 +1,49 @@
 using UnityEngine;
 using System.Collections;
-using UnityEngine.Audio; // ВАЖНО: Добавлено пространство имен для микшера
+using UnityEngine.Audio;
 
 public class DynamicMusicManager : MonoBehaviour
 {
     [Header("Audio Mixing")]
-    // Сюда перетащи группу "Music" из твоего Audio Mixer
-    public AudioMixerGroup musicOutputGroup;
+    public AudioMixerGroup musicOutputGroup; // Группа Music в микшере
 
     [Header("Target")]
-    public PlayerCuteness playerCuteness;
+    public PlayerCuteness playerCuteness; // Ссылка на скрипт состояния игрока
 
-    [Header("Thresholds (Hysteresis)")]
-    [Tooltip("Если милота ВЫШЕ этого числа -> включаем Милую музыку")]
+    [Header("Пороги (Гистерезис)")]
+    // Гистерезис нужен, чтобы музыка не "дребезжала", если значение колеблется около 50.
+    // Переключаемся на "Милую", только если > 60. Обратно на "Грубую", только если < 40.
     public float switchToCuteThreshold = 60f;
-
-    [Tooltip("Если милота НИЖЕ этого числа -> включаем Грубую музыку")]
     public float switchToRoughThreshold = 40f;
 
-    [Header("Transition")]
-    [Tooltip("Скорость плавного перехода (сек)")]
-    public float fadeDuration = 2.0f;
+    [Header("Переход")]
+    public float fadeDuration = 2.0f; // Время кроссфейда
     [Range(0f, 1f)] public float maxVolume = 0.5f;
 
-    [Header("Music Library")]
-    public AudioClip[] roughTracks; // Грубая музыка (для низкой милоты)
-    public AudioClip[] cuteTracks;  // Милая музыка (для высокой милоты)
+    [Header("Библиотека музыки")]
+    public AudioClip[] roughTracks; // Треки для низкой милоты
+    public AudioClip[] cuteTracks;  // Треки для высокой милоты
 
-    // Два источника звука для кроссфейда (плавного перетекания)
+    // Два источника звука для плавного перетекания одного в другой
     private AudioSource _sourceRough;
     private AudioSource _sourceCute;
 
-    // Текущее состояние: true = играет милая, false = играет грубая
+    // Флаг текущего состояния
     private bool _isPlayingCute;
 
-    // Чтобы не запускать корутину перехода много раз подряд
+    // Ссылка на активную корутину перехода (чтобы можно было прервать)
     private Coroutine _fadeCoroutine;
 
     void Start()
     {
-        // 1. Если игрока не назначили вручную, ищем на сцене
         if (playerCuteness == null)
             playerCuteness = FindObjectOfType<PlayerCuteness>();
 
-        // 2. Создаем два AudioSource программно
+        // Программно создаем два AudioSource
         _sourceRough = CreateSource("AudioSource_Rough");
         _sourceCute = CreateSource("AudioSource_Cute");
 
-        // 3. Определяем начальное состояние
+        // Определяем, какую музыку играть на старте
         if (playerCuteness != null)
         {
             float currentVal = playerCuteness.CurrentCuteness;
@@ -58,11 +54,11 @@ public class DynamicMusicManager : MonoBehaviour
             _isPlayingCute = false;
         }
 
-        // 4. Запускаем треки
+        // Запускаем воспроизведение
         PlayRandomTrack(_sourceRough, roughTracks);
         PlayRandomTrack(_sourceCute, cuteTracks);
 
-        // 5. Устанавливаем начальную громкость
+        // Выставляем начальную громкость (один играет, другой заглушен)
         if (_isPlayingCute)
         {
             _sourceCute.volume = maxVolume;
@@ -81,7 +77,7 @@ public class DynamicMusicManager : MonoBehaviour
 
         float currentCuteness = playerCuteness.CurrentCuteness;
 
-        // --- ЛОГИКА ГИСТЕРЕЗИСА ---
+        // Логика переключения с учетом гистерезиса
         if (!_isPlayingCute && currentCuteness > switchToCuteThreshold)
         {
             SwitchToCute();
@@ -91,6 +87,7 @@ public class DynamicMusicManager : MonoBehaviour
             SwitchToRough();
         }
 
+        // Если трек закончился, запускаем следующий случайный
         CheckAndLoop(_sourceRough, roughTracks);
         CheckAndLoop(_sourceCute, cuteTracks);
     }
@@ -109,6 +106,7 @@ public class DynamicMusicManager : MonoBehaviour
         _fadeCoroutine = StartCoroutine(Crossfade(_sourceRough, _sourceCute));
     }
 
+    // Корутина плавного изменения громкости (кроссфейд)
     private IEnumerator Crossfade(AudioSource toOn, AudioSource toOff)
     {
         float timer = 0f;
@@ -120,32 +118,30 @@ public class DynamicMusicManager : MonoBehaviour
             timer += Time.deltaTime;
             float t = timer / fadeDuration;
 
+            // Lerp интерполирует значение от start до target
             toOn.volume = Mathf.Lerp(startVolOn, maxVolume, t);
             toOff.volume = Mathf.Lerp(startVolOff, 0f, t);
 
-            yield return null;
+            yield return null; // Ждем следующий кадр
         }
 
+        // Гарантируем финальные значения
         toOn.volume = maxVolume;
         toOff.volume = 0f;
     }
 
-    // Создание AudioSource "на лету"
     private AudioSource CreateSource(string goName)
     {
         GameObject go = new GameObject(goName);
         go.transform.SetParent(this.transform);
         AudioSource src = go.AddComponent<AudioSource>();
 
-        // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
-        // Назначаем Output группу микшера, если она задана в инспекторе
         if (musicOutputGroup != null)
         {
             src.outputAudioMixerGroup = musicOutputGroup;
         }
-        // -------------------------
 
-        src.loop = false;
+        src.loop = false; // Мы сами контролируем луп через код
         src.playOnAwake = false;
         return src;
     }
@@ -160,6 +156,7 @@ public class DynamicMusicManager : MonoBehaviour
 
     private void CheckAndLoop(AudioSource source, AudioClip[] clips)
     {
+        // Если музыка не играет и игра не на паузе (TimeScale > 0)
         if (!source.isPlaying && Time.timeScale > 0)
         {
             PlayRandomTrack(source, clips);

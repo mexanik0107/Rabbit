@@ -4,20 +4,21 @@ using TMPro;
 
 public class HUD : MonoBehaviour
 {
-    [Header("Cuteness Bar")]
+    [Header("Полоска Милоты")]
     public Slider cutenessSlider;
     public Image cutenessFill;
-    public Gradient cutenessGradient;
+    public Gradient cutenessGradient; // Позволяет менять цвет полоски от зеленого к красному
 
-    [Header("Ammo Info")]
+    [Header("Патроны")]
     public TMP_Text currentAmmoText;
     public TMP_Text totalAmmoText;
 
-    [Header("Game Info")]
-    public TMP_Text waveText;       // Сюда будет писаться "WAVE 1" или "NEXT: 5..."
-    public TMP_Text gameTimerText;  // НОВОЕ: Сюда перетащи текст общего таймера
+    [Header("Инфо")]
+    public TMP_Text waveText;
+    public TMP_Text gameTimerText;
 
-    [Header("Visual Darkening")]
+    [Header("Визуальное затемнение")]
+    // Градиент для изменения цвета всего интерфейса при повышении опасности
     public Gradient interfaceGradient;
     public Image[] allHudImages;
     public TMP_Text[] allHudTexts;
@@ -45,13 +46,12 @@ public class HUD : MonoBehaviour
     {
         float percentage = Mathf.Clamp01(currentVal / _maxCuteness);
 
-        // 1. Полоска (полный цвет)
+        // 1. Меняем цвет самой полоски (Health Bar)
         if (cutenessFill != null) cutenessFill.color = cutenessGradient.Evaluate(percentage);
 
-        // 2. Цвет интерфейса
+        // 2. Меняем цвет элементов интерфейса (для атмосферы)
         Color targetColor = interfaceGradient.Evaluate(percentage);
 
-        // Картинки красим как обычно
         if (allHudImages != null)
         {
             foreach (var img in allHudImages)
@@ -60,21 +60,18 @@ public class HUD : MonoBehaviour
             }
         }
 
-        // ТЕКСТ: Красим только ЛИЦЕВУЮ часть (faceColor), чтобы Аутлайн остался черным!
         if (allHudTexts != null)
         {
             foreach (var txt in allHudTexts)
             {
                 if (txt != null)
                 {
-                    // faceColor принимает Color32, приведение автоматическое
+                    // Меняем только цвет заливки текста (faceColor), чтобы обводка осталась черной
                     txt.faceColor = targetColor;
                 }
             }
         }
     }
-
-    // --- Обновление информации ---
 
     public void UpdateAmmo(int clip, int total)
     {
@@ -91,10 +88,9 @@ public class HUD : MonoBehaviour
     {
         if (gameTimerText != null)
         {
-            // Форматируем время в ММ:СС
             int minutes = Mathf.FloorToInt(timeInSeconds / 60F);
             int seconds = Mathf.FloorToInt(timeInSeconds - minutes * 60);
             gameTimerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
         }
     }
-}   
+}

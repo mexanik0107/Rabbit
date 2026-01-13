@@ -4,35 +4,34 @@ using UnityEngine.Audio;
 [RequireComponent(typeof(AudioSource))]
 public class PlayerCuteness : MonoBehaviour
 {
-    [Header("Settings")]
+    [Header("Настройки")]
     public float maxCuteness = 100f;
     public float startCuteness = 0f;
 
-    [Header("Combat Balance")]
+    [Header("Баланс")]
     [Range(0f, 100f)]
-    public float killReductionPercent = 10f;
+    public float killReductionPercent = 10f; // На сколько процентов падает милота при убийстве
 
-    [Header("References")]
+    [Header("Ссылки")]
     public HUD hud;
 
-    [Header("Audio")]
-    // Перетащи сюда группу SFX
+    [Header("Аудио")]
     public AudioMixerGroup sfxGroup;
-    public AudioClip hitSound;
-    public AudioClip healSound;
+    public AudioClip hitSound;      // Звук получения "урона" (милоты)
+    public AudioClip healSound;     // Звук снижения милоты (как бы лечение)
     public AudioClip gameOverSound;
 
     private float _currentCuteness;
     private AudioSource _audioSource;
     private bool _isDead = false;
 
+    // Публичное свойство для чтения текущего значения (инкапсуляция)
     public float CurrentCuteness => _currentCuteness;
 
     void Awake()
     {
         _audioSource = GetComponent<AudioSource>();
 
-        // Привязка к микшеру
         if (sfxGroup != null && _audioSource != null)
         {
             _audioSource.outputAudioMixerGroup = sfxGroup;
@@ -41,11 +40,13 @@ public class PlayerCuteness : MonoBehaviour
         if (hud == null) hud = FindObjectOfType<HUD>();
     }
 
+    // Подписываемся на события при включении объекта
     void OnEnable()
     {
         EnemyHealth.OnEnemyDied += HandleEnemyDeath;
     }
 
+    // Отписываемся при выключении (важно, чтобы избежать утечек памяти)
     void OnDisable()
     {
         EnemyHealth.OnEnemyDied -= HandleEnemyDeath;
@@ -57,6 +58,7 @@ public class PlayerCuteness : MonoBehaviour
         if (hud != null) hud.Initialize(maxCuteness, _currentCuteness);
     }
 
+    // Метод-обработчик события "Враг умер"
     private void HandleEnemyDeath(float points)
     {
         if (_isDead) return;
@@ -64,6 +66,7 @@ public class PlayerCuteness : MonoBehaviour
         RemoveCuteness(reductionAmount);
     }
 
+    // "Получение урона" (милота растет)
     public void AddCuteness(float amount, bool playSound = true)
     {
         if (_isDead) return;
@@ -75,16 +78,19 @@ public class PlayerCuteness : MonoBehaviour
 
         UpdateHUD();
 
+        // Если милота зашкалила — проигрыш
         if (_currentCuteness >= maxCuteness)
         {
             Die();
         }
     }
 
+    // "Лечение" (милота падает)
     public void RemoveCuteness(float amount)
     {
         if (_isDead) return;
         bool wasAlreadySafe = _currentCuteness <= 0.01f;
+
         _currentCuteness -= amount;
         if (_currentCuteness < 0) _currentCuteness = 0;
 
@@ -105,7 +111,6 @@ public class PlayerCuteness : MonoBehaviour
 
         if (gameOverSound != null)
         {
-            // Используем кастомный метод, так как объект игрока может отключиться
             PlaySoundIndependent(gameOverSound);
         }
 
@@ -115,10 +120,12 @@ public class PlayerCuteness : MonoBehaviour
         }
         else
         {
+            // Фолбэк: перезагрузка сцены, если нет ГеймМенеджера
             UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
         }
     }
 
+    // Создаем независимый звук, так как объект игрока может быть отключен при смерти
     private void PlaySoundIndependent(AudioClip clip)
     {
         GameObject go = new GameObject("GameOverSound");

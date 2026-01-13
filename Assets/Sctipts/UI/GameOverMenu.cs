@@ -5,15 +5,15 @@ using UnityEngine.SceneManagement;
 
 public class GameOverMenu : MonoBehaviour
 {
-    [Header("UI References")]
+    [Header("Ссылки на UI")]
     public CanvasGroup panelGroup;
 
-    [Header("Stats Texts")]
+    [Header("Тексты статистики")]
     public TMP_Text scoreText;
     public TMP_Text timeText;
     public TMP_Text waveText;
 
-    [Header("Buttons")]
+    [Header("Кнопки")]
     public Button restartButton;
     public Button exitButton;
 
@@ -27,18 +27,16 @@ public class GameOverMenu : MonoBehaviour
         Hide();
     }
 
-    // --- НОВОЕ: Слушаем кнопку ESC ---
     void Update()
     {
-        // Если меню невидимо, ничего не делаем
         if (!gameObject.activeSelf) return;
 
+        // Позволяем выйти через Escape
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             ExitGame();
         }
     }
-    // ---------------------------------
 
     public void Show(int score, float timePlayed, int waves)
     {
@@ -62,9 +60,10 @@ public class GameOverMenu : MonoBehaviour
 
     private void RestartGame()
     {
-        Time.timeScale = 1f;
+        Time.timeScale = 1f; // Важно вернуть время обратно!
         string currentScene = SceneManager.GetActiveScene().name;
 
+        // Используем наш загрузчик сцен, если он есть
         if (SceneLoader.Instance != null) SceneLoader.Instance.LoadScene(currentScene);
         else SceneManager.LoadScene(currentScene);
     }
@@ -76,6 +75,7 @@ public class GameOverMenu : MonoBehaviour
         else SceneManager.LoadScene(MENU_SCENE_NAME);
     }
 
+    // Форматирование секунд в ММ:СС
     private string FormatTime(float timeInSeconds)
     {
         int minutes = Mathf.FloorToInt(timeInSeconds / 60F);

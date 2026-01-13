@@ -174,37 +174,57 @@ public class AudioDashboard : EditorWindow
 ================================================================================
 
 using UnityEngine;
+using UnityEngine.Audio; // ВАЖНО
 
 [RequireComponent(typeof(Collider2D))]
 public class AmmoPickup : MonoBehaviour
 {
-    [Tooltip("Количество патронов в этой коробке")]
+    [Header("Settings")]
     public int ammoAmount = 10;
 
-    [Tooltip("Звук подбора")]
+    [Header("Audio")]
     public AudioClip pickupSound;
+    // Перетащи сюда группу SFX
+    public AudioMixerGroup sfxGroup;
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
-        // Проверяем, что в нас вошел именно Игрок
         if (collision.CompareTag("Player"))
         {
-            // Пытаемся получить компонент стрельбы
             PlayerShooting shooting = collision.GetComponent<PlayerShooting>();
 
             if (shooting != null)
             {
                 shooting.AddAmmo(ammoAmount);
 
-                // Воспроизводим звук (через AudioSource.PlayClipAtPoint, т.к. объект сейчас уничтожится)
                 if (pickupSound != null)
                 {
-                    AudioSource.PlayClipAtPoint(pickupSound, transform.position);
+                    // Вместо PlayClipAtPoint используем свой метод с микшером
+                    PlaySoundWithMixer(pickupSound, transform.position);
                 }
 
                 Destroy(gameObject);
             }
         }
+    }
+
+    private void PlaySoundWithMixer(AudioClip clip, Vector3 position)
+    {
+        // Создаем временный объект для звука
+        GameObject tempAudio = new GameObject("AmmoPickupSound");
+        tempAudio.transform.position = position;
+
+        AudioSource source = tempAudio.AddComponent<AudioSource>();
+        source.clip = clip;
+
+        // --- САМОЕ ГЛАВНОЕ: Назначаем группу микшера ---
+        if (sfxGroup != null)
+        {
+            source.outputAudioMixerGroup = sfxGroup;
+        }
+
+        source.Play();
+        Destroy(tempAudio, clip.length);
     }
 }
 
@@ -422,7 +442,8 @@ public class DynamicMusicManager : MonoBehaviour
 
 using UnityEngine;
 using System.Collections;
-using Mono.Cecil.Cil;
+using UnityEngine.Audio;
+
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(AudioSource))]
 [RequireComponent(typeof(SpriteRenderer))]
@@ -431,6 +452,7 @@ public class EnemyAI : MonoBehaviour
     [Header("Targeting")]
     public Transform player;
     public bool findPlayerAutomatically = true;
+
     [Header("Jump Movement Settings")]
     public float jumpSpeed = 6f;
     public float jumpDuration = 0.6f;
@@ -438,35 +460,26 @@ public class EnemyAI : MonoBehaviour
     public AnimationCurve jumpScaleCurve = new AnimationCurve(new Keyframe(0, 0), new Keyframe(0.5f, 0.5f), new Keyframe(1, 0));
 
     [Header("Visuals & Animation")]
-    [Tooltip("Общий множитель размера кролика. 1 = как при импорте, 0.5 = половина.")]
-    [Range(0.1f, 3f)]
-    public float sizeMultiplier = 1.0f;
-
-    [Tooltip("Скорость анимации (кадров в секунду)")]
+    [Range(0.1f, 3f)] public float sizeMultiplier = 1.0f;
     public float animationFps = 10f;
-
     public Sprite[] idleSprites;
     public Sprite[] jumpSprites;
 
-    [Header("Movement Stats")]
+    [Header("Stats")]
     public float rotationSpeed = 10f;
-
-    [Header("Combat Stats")]
     public float attackRange = 1.5f;
     public float attackCooldown = 1f;
     public float cutenessDamage = 10f;
 
     [Header("Audio")]
+    public AudioMixerGroup sfxGroup;
     public AudioClip attackSound;
     public AudioClip jumpSound;
 
     private Rigidbody2D _rb;
     private AudioSource _audioSource;
     private SpriteRenderer _spriteRenderer;
-
     private float _lastAttackTime;
-
-    // Храним размер, который был у объекта в редакторе (Scale 1,1,1 или другой)
     private Vector3 _baseEditorScale;
     private bool _isJumping = false;
 
@@ -476,7 +489,12 @@ public class EnemyAI : MonoBehaviour
         _audioSource = GetComponent<AudioSource>();
         _spriteRenderer = GetComponent<SpriteRenderer>();
 
-        // Запоминаем исходный Scale при старте (обычно это 1,1,1)
+        // Привязываем к микшеру
+        if (sfxGroup != null && _audioSource != null)
+        {
+            _audioSource.outputAudioMixerGroup = sfxGroup;
+        }
+
         _baseEditorScale = transform.localScale;
     }
 
@@ -485,10 +503,7 @@ public class EnemyAI : MonoBehaviour
         if (findPlayerAutomatically && player == null)
         {
             GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-            if (playerObj != null)
-            {
-                player = playerObj.transform;
-            }
+            if (playerObj != null) player = playerObj.transform;
         }
 
         StartCoroutine(RabbitBehaviorRoutine());
@@ -500,8 +515,6 @@ public class EnemyAI : MonoBehaviour
         HandleAttackLogic();
     }
 
-    // --- Логика Анимации Спрайтов ---
-
     private IEnumerator AnimationRoutine()
     {
         int frameIndex = 0;
@@ -510,20 +523,15 @@ public class EnemyAI : MonoBehaviour
         while (true)
         {
             Sprite[] currentClips = _isJumping ? jumpSprites : idleSprites;
-
             if (currentClips != null && currentClips.Length > 0)
             {
                 float frameDuration = 1f / animationFps;
                 timer += Time.deltaTime;
-
                 if (timer >= frameDuration)
                 {
                     timer = 0f;
                     frameIndex++;
-
-                    if (frameIndex >= currentClips.Length)
-                        frameIndex = 0;
-
+                    if (frameIndex >= currentClips.Length) frameIndex = 0;
                     _spriteRenderer.sprite = currentClips[frameIndex];
                 }
             }
@@ -531,12 +539,9 @@ public class EnemyAI : MonoBehaviour
         }
     }
 
-    // --- Логика Атаки ---
-
     private void HandleAttackLogic()
     {
         if (player == null) return;
-
         float distanceToPlayer = Vector2.Distance(transform.position, player.position);
 
         if (distanceToPlayer <= attackRange)
@@ -552,7 +557,9 @@ public class EnemyAI : MonoBehaviour
     {
         _lastAttackTime = Time.time;
 
-        if (attackSound != null) _audioSource.PlayOneShot(attackSound);
+        // --- ИЗМЕНЕНИЕ: Звук атаки отключен ---
+        // if (attackSound != null) _audioSource.PlayOneShot(attackSound);
+        // --------------------------------------
 
         if (player != null)
         {
@@ -560,12 +567,9 @@ public class EnemyAI : MonoBehaviour
             if (playerCuteness != null)
             {
                 playerCuteness.AddCuteness(cutenessDamage);
-                Debug.Log($"{name} сделал кусь!");
             }
         }
     }
-
-    // --- Логика Движения и Масштаба ---
 
     private IEnumerator RabbitBehaviorRoutine()
     {
@@ -573,23 +577,16 @@ public class EnemyAI : MonoBehaviour
 
         while (true)
         {
-            // 1. IDLE (Стоим)
             _isJumping = false;
-
             float timer = 0f;
             while (timer < jumpInterval)
             {
                 RotateTowardsPlayer();
-
-                // В фазе покоя принудительно устанавливаем размер
-                // Это позволяет менять sizeMultiplier в инспекторе и сразу видеть результат
                 transform.localScale = GetCurrentTargetSize();
-
                 timer += Time.deltaTime;
                 yield return null;
             }
 
-            // 2. JUMP (Прыгаем)
             if (player != null)
             {
                 yield return StartCoroutine(PerformJump());
@@ -600,33 +597,24 @@ public class EnemyAI : MonoBehaviour
     private IEnumerator PerformJump()
     {
         _isJumping = true;
-
         Vector2 jumpDirection = (player.position - transform.position).normalized;
 
+        // Звук прыжка остался
         if (jumpSound != null) _audioSource.PlayOneShot(jumpSound);
 
         float timeElapsed = 0f;
-
-        // Фиксируем базовый размер перед прыжком, чтобы он не скакал, если мы крутим настройки
         Vector3 startJumpSize = GetCurrentTargetSize();
 
         while (timeElapsed < jumpDuration)
         {
             timeElapsed += Time.deltaTime;
             float t = timeElapsed / jumpDuration;
-
-            // Движение
             _rb.MovePosition(_rb.position + jumpDirection * jumpSpeed * Time.fixedDeltaTime);
-
-            // Эффект масштаба: Базовый Размер * (1 + ЗначениеКривой)
-            // Если кривая дает 0.5, то размер будет 1.5 от базового
             float curveValue = jumpScaleCurve.Evaluate(t);
             transform.localScale = startJumpSize * (1f + curveValue);
-
             yield return new WaitForFixedUpdate();
         }
 
-        // Возвращаем точный размер в конце
         transform.localScale = GetCurrentTargetSize();
         _isJumping = false;
     }
@@ -634,14 +622,12 @@ public class EnemyAI : MonoBehaviour
     private void RotateTowardsPlayer()
     {
         if (player == null) return;
-
         Vector2 direction = player.position - transform.position;
         float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
         Quaternion targetRotation = Quaternion.Euler(0, 0, angle);
         transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
     }
 
-    // Вспомогательный метод для расчета текущего базового размера
     private Vector3 GetCurrentTargetSize()
     {
         return _baseEditorScale * sizeMultiplier;
@@ -660,6 +646,7 @@ public class EnemyAI : MonoBehaviour
 
 using UnityEngine;
 using System;
+using UnityEngine.Audio;
 
 [RequireComponent(typeof(AudioSource))]
 public class EnemyHealth : MonoBehaviour
@@ -668,6 +655,8 @@ public class EnemyHealth : MonoBehaviour
     public float maxHealth = 10f;
 
     [Header("Audio")]
+    // Перетащи сюда группу SFX в префабе врага
+    public AudioMixerGroup sfxGroup;
     public AudioClip hitSound;
     public AudioClip deathSound;
 
@@ -679,6 +668,12 @@ public class EnemyHealth : MonoBehaviour
     void Awake()
     {
         _audioSource = GetComponent<AudioSource>();
+
+        // Привязываем основной источник звука (для получения урона) к микшеру
+        if (sfxGroup != null && _audioSource != null)
+        {
+            _audioSource.outputAudioMixerGroup = sfxGroup;
+        }
     }
 
     void OnEnable()
@@ -703,23 +698,36 @@ public class EnemyHealth : MonoBehaviour
 
     private void Die()
     {
-        // --- НОВОЕ: Проверка на лут ---
-        // Пытаемся найти компонент LootDropper на этом же враге
-        // Если он есть, вызываем метод TryDropLoot()
         if (TryGetComponent(out LootDropper looter))
         {
             looter.TryDropLoot();
         }
-        // ------------------------------
 
         OnEnemyDied?.Invoke(5f);
 
         if (deathSound != null)
         {
-            AudioSource.PlayClipAtPoint(deathSound, transform.position);
+            // Создаем временный звук с привязкой к микшеру
+            PlaySoundAndDestroy(deathSound, transform.position);
         }
 
         Destroy(gameObject);
+    }
+
+    private void PlaySoundAndDestroy(AudioClip clip, Vector3 position)
+    {
+        GameObject go = new GameObject("DeathSound");
+        go.transform.position = position;
+        AudioSource src = go.AddComponent<AudioSource>();
+        src.clip = clip;
+
+        if (sfxGroup != null)
+        {
+            src.outputAudioMixerGroup = sfxGroup;
+        }
+
+        src.Play();
+        Destroy(go, clip.length);
     }
 }
 
@@ -879,8 +887,8 @@ public class MinimapFollow : MonoBehaviour
 
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Audio;
 
-// Добавляем требование компонента, чтобы избежать ошибок null reference
 [RequireComponent(typeof(AudioSource))]
 public class PlayerController : MonoBehaviour
 {
@@ -888,8 +896,10 @@ public class PlayerController : MonoBehaviour
     public float moveSpeed = 10f;
 
     [Header("Audio Settings")]
-    public AudioClip[] footstepSounds; // Массив звуков для разнообразия
-    public float stepInterval = 0.5f;  // Как часто играть звук (чем меньше, тем чаще)
+    // Перетащи сюда группу SFX
+    public AudioMixerGroup sfxGroup;
+    public AudioClip[] footstepSounds;
+    public float stepInterval = 0.5f;
 
     [Header("References")]
     public Camera cam;
@@ -904,13 +914,17 @@ public class PlayerController : MonoBehaviour
 
     void Awake()
     {
-        // Кэшируем компонент при инициализации
         _audioSource = GetComponent<AudioSource>();
+
+        // Привязка к микшеру
+        if (sfxGroup != null && _audioSource != null)
+        {
+            _audioSource.outputAudioMixerGroup = sfxGroup;
+        }
     }
 
     void Update()
     {
-        // 1. Считываем клавиатуру
         movement = Vector2.zero;
         if (Keyboard.current != null)
         {
@@ -922,13 +936,11 @@ public class PlayerController : MonoBehaviour
 
         movement = movement.normalized;
 
-        // 2. Считываем мышь
         if (Mouse.current != null)
         {
             mousePos = cam.ScreenToWorldPoint(Mouse.current.position.ReadValue());
         }
 
-        // 3. Логика звука шагов
         HandleFootsteps();
     }
 
@@ -944,7 +956,6 @@ public class PlayerController : MonoBehaviour
 
     private void HandleFootsteps()
     {
-        // Если игрок двигается (вектор движения не равен нулю)
         if (movement.sqrMagnitude > 0.1f)
         {
             _stepTimer -= Time.deltaTime;
@@ -952,12 +963,11 @@ public class PlayerController : MonoBehaviour
             if (_stepTimer <= 0)
             {
                 PlayRandomFootstep();
-                _stepTimer = stepInterval; // Сброс таймера
+                _stepTimer = stepInterval;
             }
         }
         else
         {
-            // Сбрасываем таймер, чтобы при начале движения звук был сразу
             _stepTimer = 0;
         }
     }
@@ -966,10 +976,7 @@ public class PlayerController : MonoBehaviour
     {
         if (footstepSounds.Length == 0) return;
 
-        // Выбираем случайный звук из массива для естественности
         int index = Random.Range(0, footstepSounds.Length);
-
-        // Изменяем высоту тона (pitch) немного, чтобы звуки не казались роботоподобными
         _audioSource.pitch = Random.Range(0.9f, 1.1f);
         _audioSource.PlayOneShot(footstepSounds[index]);
     }
@@ -980,6 +987,7 @@ public class PlayerController : MonoBehaviour
 ================================================================================
 
 using UnityEngine;
+using UnityEngine.Audio;
 
 [RequireComponent(typeof(AudioSource))]
 public class PlayerCuteness : MonoBehaviour
@@ -989,33 +997,37 @@ public class PlayerCuteness : MonoBehaviour
     public float startCuteness = 0f;
 
     [Header("Combat Balance")]
-    [Tooltip("На сколько процентов (от максимума) снижается милота при убийстве врага")]
     [Range(0f, 100f)]
-    public float killReductionPercent = 10f; // Например, 10% за врага
+    public float killReductionPercent = 10f;
 
     [Header("References")]
     public HUD hud;
 
     [Header("Audio")]
+    // Перетащи сюда группу SFX
+    public AudioMixerGroup sfxGroup;
     public AudioClip hitSound;
-    public AudioClip healSound; // Звук снижения милоты (облегчения)
+    public AudioClip healSound;
     public AudioClip gameOverSound;
 
     private float _currentCuteness;
     private AudioSource _audioSource;
     private bool _isDead = false;
 
-    // Публичное свойство для музыкального менеджера
     public float CurrentCuteness => _currentCuteness;
 
     void Awake()
     {
         _audioSource = GetComponent<AudioSource>();
+
+        // Привязка к микшеру
+        if (sfxGroup != null && _audioSource != null)
+        {
+            _audioSource.outputAudioMixerGroup = sfxGroup;
+        }
+
         if (hud == null) hud = FindObjectOfType<HUD>();
     }
-
-    // --- ПОДПИСКА НА СОБЫТИЯ ---
-    // Мы слушаем "радиоэфир" игры. Если где-то крикнули "Враг умер", мы реагируем.
 
     void OnEnable()
     {
@@ -1026,7 +1038,6 @@ public class PlayerCuteness : MonoBehaviour
     {
         EnemyHealth.OnEnemyDied -= HandleEnemyDeath;
     }
-    // ---------------------------
 
     void Start()
     {
@@ -1034,21 +1045,10 @@ public class PlayerCuteness : MonoBehaviour
         if (hud != null) hud.Initialize(maxCuteness, _currentCuteness);
     }
 
-    void Update()
-    {
-        // УДАЛЕНО: Пассивное накопление (AddCuteness(passiveGain...))
-        // Теперь милота сама по себе НЕ растет.
-    }
-
-    // Этот метод вызывается автоматически, когда умирает любой враг
     private void HandleEnemyDeath(float points)
     {
         if (_isDead) return;
-
-        // Считаем процент от МАКСИМУМА. 
-        // Если maxCuteness = 100, а killReductionPercent = 10, то снимаем 10 ед.
         float reductionAmount = maxCuteness * (killReductionPercent / 100f);
-
         RemoveCuteness(reductionAmount);
     }
 
@@ -1072,14 +1072,10 @@ public class PlayerCuteness : MonoBehaviour
     public void RemoveCuteness(float amount)
     {
         if (_isDead) return;
-
-        // Если милота была 0, и мы пытаемся снять еще, звук играть не надо
         bool wasAlreadySafe = _currentCuteness <= 0.01f;
-
         _currentCuteness -= amount;
         if (_currentCuteness < 0) _currentCuteness = 0;
 
-        // Играем звук "исцеления" (снижения милоты), только если реально что-то снизилось
         if (!wasAlreadySafe && amount > 0 && healSound != null)
             _audioSource.PlayOneShot(healSound);
 
@@ -1094,10 +1090,12 @@ public class PlayerCuteness : MonoBehaviour
     private void Die()
     {
         _isDead = true;
-        Debug.Log("Game Over: Too Cute!");
 
         if (gameOverSound != null)
-            AudioSource.PlayClipAtPoint(gameOverSound, transform.position);
+        {
+            // Используем кастомный метод, так как объект игрока может отключиться
+            PlaySoundIndependent(gameOverSound);
+        }
 
         if (GameManager.Instance != null)
         {
@@ -1108,6 +1106,17 @@ public class PlayerCuteness : MonoBehaviour
             UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
         }
     }
+
+    private void PlaySoundIndependent(AudioClip clip)
+    {
+        GameObject go = new GameObject("GameOverSound");
+        go.transform.position = transform.position;
+        AudioSource src = go.AddComponent<AudioSource>();
+        src.clip = clip;
+        if (sfxGroup != null) src.outputAudioMixerGroup = sfxGroup;
+        src.Play();
+        Destroy(go, clip.length);
+    }
 }
 
 ================================================================================
@@ -1117,13 +1126,21 @@ public class PlayerCuteness : MonoBehaviour
 using UnityEngine;
 using UnityEngine.InputSystem;
 using System.Collections;
+using UnityEngine.Audio;
 
 public class PlayerShooting : MonoBehaviour
 {
     [Header("References")]
     public GameObject bulletPrefab;
     public Transform firePoint;
-    public HUD hud; // Ссылка на HUD
+    public HUD hud;
+
+    [Header("Audio")]
+    // Перетащи сюда группу SFX
+    public AudioMixerGroup sfxGroup;
+    public AudioClip shootSound;
+    public AudioClip reloadSound;
+    public AudioClip emptyClickSound;
 
     [Header("Weapon Stats")]
     public float damage = 2f;
@@ -1137,16 +1154,11 @@ public class PlayerShooting : MonoBehaviour
     public int startTotalAmmo = 30;
     public float reloadTime = 1.5f;
 
-    [Header("Audio")]
-    public AudioClip shootSound;
-    public AudioClip reloadSound;
-    public AudioClip emptyClickSound;
-    private AudioSource _audioSource;
-
     public int CurrentClip { get; private set; }
     public int CurrentTotalAmmo { get; private set; }
     public bool IsReloading { get; private set; }
 
+    private AudioSource _audioSource;
     private float _nextFireTime = 0f;
 
     void Awake()
@@ -1154,7 +1166,12 @@ public class PlayerShooting : MonoBehaviour
         _audioSource = GetComponent<AudioSource>();
         if (_audioSource == null) _audioSource = gameObject.AddComponent<AudioSource>();
 
-        // Если HUD не назначен в инспекторе, ищем его сами
+        // Привязываем к микшеру
+        if (sfxGroup != null)
+        {
+            _audioSource.outputAudioMixerGroup = sfxGroup;
+        }
+
         if (hud == null) hud = FindObjectOfType<HUD>();
     }
 
@@ -1162,22 +1179,19 @@ public class PlayerShooting : MonoBehaviour
     {
         CurrentClip = maxMagazineSize;
         CurrentTotalAmmo = startTotalAmmo;
-
-        UpdateAmmoUI(); // Обновляем текст при старте
+        UpdateAmmoUI();
     }
 
     void Update()
     {
         if (IsReloading) return;
 
-        // Перезарядка (R)
         if (Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
         {
             StartReload();
             return;
         }
 
-        // Стрельба (ЛКМ)
         if (Mouse.current != null && Mouse.current.leftButton.isPressed)
         {
             if (Time.time >= _nextFireTime)
@@ -1205,8 +1219,7 @@ public class PlayerShooting : MonoBehaviour
         if (bulletPrefab == null || firePoint == null) return;
 
         float randomSpread = Random.Range(-spreadAngle, spreadAngle);
-        Quaternion spreadRotation = Quaternion.Euler(0, 0, randomSpread);
-        Quaternion finalRotation = firePoint.rotation * spreadRotation;
+        Quaternion finalRotation = firePoint.rotation * Quaternion.Euler(0, 0, randomSpread);
 
         GameObject bulletObj = Instantiate(bulletPrefab, firePoint.position, finalRotation);
 
@@ -1218,8 +1231,7 @@ public class PlayerShooting : MonoBehaviour
         }
 
         CurrentClip--;
-        UpdateAmmoUI(); // Обновляем UI после выстрела
-
+        UpdateAmmoUI();
         PlaySound(shootSound, randomizePitch: true);
     }
 
@@ -1235,8 +1247,6 @@ public class PlayerShooting : MonoBehaviour
     private IEnumerator ReloadRoutine()
     {
         IsReloading = true;
-
-        // Тут можно вывести на экран текст "Reloading...", если нужно
         PlaySound(reloadSound);
 
         yield return new WaitForSeconds(reloadTime);
@@ -1248,31 +1258,22 @@ public class PlayerShooting : MonoBehaviour
         CurrentTotalAmmo -= ammoToReload;
 
         IsReloading = false;
-        UpdateAmmoUI(); // Обновляем UI после перезарядки
+        UpdateAmmoUI();
     }
 
     public void AddAmmo(int amount)
     {
         CurrentTotalAmmo += amount;
-        if (CurrentTotalAmmo > maxTotalAmmo)
-        {
-            CurrentTotalAmmo = maxTotalAmmo;
-        }
+        if (CurrentTotalAmmo > maxTotalAmmo) CurrentTotalAmmo = maxTotalAmmo;
 
-        UpdateAmmoUI(); // Обновляем UI при подборе
+        UpdateAmmoUI();
 
-        if (CurrentClip == 0)
-        {
-            StartReload();
-        }
+        if (CurrentClip == 0) StartReload();
     }
 
     private void UpdateAmmoUI()
     {
-        if (hud != null)
-        {
-            hud.UpdateAmmo(CurrentClip, CurrentTotalAmmo);
-        }
+        if (hud != null) hud.UpdateAmmo(CurrentClip, CurrentTotalAmmo);
     }
 
     private void PlaySound(AudioClip clip, bool randomizePitch = false)
@@ -1913,25 +1914,27 @@ public class MainMenu : MonoBehaviour
 
     private void Start()
     {
+        if (settingsMenu != null && settingsMenu.gameObject.scene.name == null)
+        {
+            Debug.LogError("ОШИБКА: SettingsMenu - это префаб! Перетащи объект со сцены.");
+        }
+
+        if (settingsMenu != null) settingsMenu.gameObject.SetActive(false);
+
         InitializeButtons();
         Show();
-        if (settingsMenu != null) settingsMenu.gameObject.SetActive(false);
     }
 
-    // --- НОВОЕ: Обработка ESC в главном меню ---
     private void Update()
     {
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            // Если открыты настройки -> нажимаем Back
             if (settingsMenu != null && settingsMenu.gameObject.activeSelf)
             {
                 settingsMenu.CloseSettings();
             }
-            // Иначе (опционально) -> можно вызывать окно выхода из игры, но обычно в меню ESC ничего не делает
         }
     }
-    // -------------------------------------------
 
     private void InitializeButtons()
     {
@@ -1941,28 +1944,37 @@ public class MainMenu : MonoBehaviour
                 if (SceneLoader.Instance != null) SceneLoader.Instance.LoadScene(GAME_SCENE_NAME);
                 else SceneManager.LoadScene(GAME_SCENE_NAME);
             });
+            // Добавляем компонент звука программно, если забыли в редакторе (для надежности)
+            if (playButton.GetComponent<UIButtonSound>() == null) playButton.gameObject.AddComponent<UIButtonSound>();
         }
 
-        if (settingsButton != null) settingsButton.onClick.AddListener(OpenSettings);
+        if (settingsButton != null)
+        {
+            settingsButton.onClick.AddListener(OpenSettings);
+            if (settingsButton.GetComponent<UIButtonSound>() == null) settingsButton.gameObject.AddComponent<UIButtonSound>();
+        }
 
         if (exitButton != null)
         {
-            exitButton.onClick.AddListener(() => {
-                Application.Quit();
-#if UNITY_EDITOR
-                UnityEditor.EditorApplication.isPlaying = false;
-#endif
-            });
+            exitButton.onClick.AddListener(() => Application.Quit());
+            if (exitButton.GetComponent<UIButtonSound>() == null) exitButton.gameObject.AddComponent<UIButtonSound>();
         }
     }
 
     public void OpenSettings()
     {
+        if (settingsMenu == null) return;
+
+        // --- ЗВУК ОТКРЫТИЯ ---
+        if (UIManager.Instance != null)
+            UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
+        // ---------------------
+
         Hide();
-        if (settingsMenu != null)
-        {
-            settingsMenu.Open(() => this.Show());
-        }
+
+        settingsMenu.Open(onBackAction: () => {
+            this.Show();
+        });
     }
 
     public void Show()
@@ -1973,7 +1985,6 @@ public class MainMenu : MonoBehaviour
             mainMenuPanel.interactable = true;
             mainMenuPanel.blocksRaycasts = true;
         }
-        gameObject.SetActive(true);
     }
 
     public void Hide()
@@ -2013,34 +2024,52 @@ public class PauseMenu : MonoBehaviour
     {
         InitializeButtons();
         Hide();
+
+        // Гарантируем, что настройки скрыты при старте
         if (settingsMenu != null) settingsMenu.gameObject.SetActive(false);
     }
 
     private void InitializeButtons()
     {
-        if (resumeButton != null) resumeButton.onClick.AddListener(ResumeGame);
-        if (settingsButton != null) settingsButton.onClick.AddListener(OpenSettings);
-        if (mainMenuButton != null) mainMenuButton.onClick.AddListener(ReturnToMainMenu);
+        // 1. Resume Button
+        if (resumeButton != null)
+        {
+            resumeButton.onClick.AddListener(ResumeGame);
+            // Авто-добавление звука клика
+            if (resumeButton.GetComponent<UIButtonSound>() == null)
+                resumeButton.gameObject.AddComponent<UIButtonSound>();
+        }
+
+        // 2. Settings Button
+        if (settingsButton != null)
+        {
+            settingsButton.onClick.AddListener(OpenSettings);
+            if (settingsButton.GetComponent<UIButtonSound>() == null)
+                settingsButton.gameObject.AddComponent<UIButtonSound>();
+        }
+
+        // 3. Main Menu Button
+        if (mainMenuButton != null)
+        {
+            mainMenuButton.onClick.AddListener(ReturnToMainMenu);
+            if (mainMenuButton.GetComponent<UIButtonSound>() == null)
+                mainMenuButton.gameObject.AddComponent<UIButtonSound>();
+        }
     }
 
     private void Update()
     {
-        // 1. Если игра окончена (Game Over), пауза не должна работать.
-        // GameOverMenu сам обработает нажатие ESC.
-        if (GameManager.Instance != null && !GameManager.Instance.IsGameActive)
-        {
-            return;
-        }
+        // Если Game Over, пауза не работает
+        if (GameManager.Instance != null && !GameManager.Instance.IsGameActive) return;
 
-        // 2. Обработка ESC
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            // ПРИОРИТЕТ 1: Если открыты настройки -> Закрываем их (Back)
+            // ПРИОРИТЕТ 1: Закрываем настройки, если они открыты
             if (settingsMenu != null && settingsMenu.gameObject.activeSelf)
             {
                 settingsMenu.CloseSettings();
             }
-            // ПРИОРИТЕТ 2: Если настройки закрыты -> Переключаем Паузу
+            // ПРИОРИТЕТ 2: Переключаем паузу
             else
             {
                 TogglePause();
@@ -2056,6 +2085,10 @@ public class PauseMenu : MonoBehaviour
 
     public void Show()
     {
+        // Звук открытия паузы
+        if (UIManager.Instance != null)
+            UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
+
         if (pauseMenuPanel != null)
         {
             pauseMenuPanel.alpha = 1;
@@ -2078,12 +2111,23 @@ public class PauseMenu : MonoBehaviour
 
     public void ResumeGame()
     {
+        // Звук закрытия паузы (резюм)
+        // Проверяем isPaused, чтобы звук не играл при старте игры (когда Hide вызывается в Start)
+        if (isPaused && UIManager.Instance != null)
+            UIManager.Instance.PlaySound(UIManager.Instance.menuCloseSound);
+
         Hide();
     }
 
     public void OpenSettings()
     {
-        // Скрываем паузу визуально, но логика PauseMenu продолжает работать
+        // --- ВОТ ЭТО БЫЛО ПРОПУЩЕНО ---
+        // Играем звук открытия меню
+        if (UIManager.Instance != null)
+            UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
+        // ------------------------------
+
+        // Скрываем паузу визуально (но время стоит)
         if (pauseMenuPanel != null)
         {
             pauseMenuPanel.alpha = 0;
@@ -2093,7 +2137,16 @@ public class PauseMenu : MonoBehaviour
 
         if (settingsMenu != null)
         {
-            settingsMenu.Open(() => this.Show());
+            settingsMenu.Open(() =>
+            {
+                // Callback: когда настройки закроются, снова показываем панель паузы
+                if (pauseMenuPanel != null)
+                {
+                    pauseMenuPanel.alpha = 1;
+                    pauseMenuPanel.interactable = true;
+                    pauseMenuPanel.blocksRaycasts = true;
+                }
+            });
         }
     }
 
@@ -2213,10 +2266,10 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Audio;
 
+[RequireComponent(typeof(CanvasGroup))]
 public class SettingsMenu : MonoBehaviour
 {
     [Header("Audio Settings")]
-    [Tooltip("Перетащи сюда ассет AudioMixer")]
     public AudioMixer mainMixer;
     public Slider musicSlider;
     public Slider sfxSlider;
@@ -2224,38 +2277,58 @@ public class SettingsMenu : MonoBehaviour
     [Header("Screen Settings")]
     public Button fullscreenBtn;
     public Button windowedBtn;
+    public Button backButton;
 
-    [Header("Button Visuals")]
+    [Header("Visuals")]
     public Image fullscreenBtnImage;
     public Image windowedBtnImage;
     public Sprite activeSprite;
     public Sprite inactiveSprite;
 
-    [Header("Navigation")]
-    public Button backButton;
-
-    // Сюда мы запомним действие "Куда вернуться"
     private System.Action _onBackCallback;
+    private CanvasGroup _canvasGroup;
 
     private void Awake()
     {
+        _canvasGroup = GetComponent<CanvasGroup>();
         InitializeSettings();
 
-        // Подписываемся на изменения слайдеров
+        // Подписки на события
         if (musicSlider != null) musicSlider.onValueChanged.AddListener(SetMusicVolume);
         if (sfxSlider != null) sfxSlider.onValueChanged.AddListener(SetSFXVolume);
 
-        if (fullscreenBtn != null) fullscreenBtn.onClick.AddListener(() => SetFullscreen(true));
-        if (windowedBtn != null) windowedBtn.onClick.AddListener(() => SetFullscreen(false));
+        // Для кнопок добавляем звуки и логику
+        SetupButton(fullscreenBtn, () => SetFullscreen(true));
+        SetupButton(windowedBtn, () => SetFullscreen(false));
+        SetupButton(backButton, CloseSettings);
 
-        if (backButton != null) backButton.onClick.AddListener(CloseSettings);
+        if (_canvasGroup != null)
+        {
+            _canvasGroup.alpha = 1;
+            _canvasGroup.interactable = true;
+            _canvasGroup.blocksRaycasts = true;
+        }
+    }
 
-        Hide();
+    // Вспомогательный метод чтобы вешать и логику, и звук
+    private void SetupButton(Button btn, UnityEngine.Events.UnityAction action)
+    {
+        if (btn != null)
+        {
+            btn.onClick.AddListener(action);
+            // Автоматически вешаем скрипт звука, если его нет
+            if (btn.GetComponent<UIButtonSound>() == null)
+                btn.gameObject.AddComponent<UIButtonSound>();
+        }
+    }
+
+    private void Start()
+    {
+        ApplyCurrentSettings();
     }
 
     private void InitializeSettings()
     {
-        // Загружаем сохраненные значения или ставим 0.75 по умолчанию
         float savedMusic = PlayerPrefs.GetFloat("MusicVol", 0.75f);
         float savedSFX = PlayerPrefs.GetFloat("SFXVol", 0.75f);
 
@@ -2263,52 +2336,29 @@ public class SettingsMenu : MonoBehaviour
         if (sfxSlider != null) sfxSlider.value = savedSFX;
 
         bool isFull = PlayerPrefs.GetInt("FullscreenState", Screen.fullScreen ? 1 : 0) == 1;
-        SetFullscreen(isFull);
+        UpdateScreenButtons(isFull);
     }
 
-    private void Start()
+    private void ApplyCurrentSettings()
     {
-        // Принудительно обновляем микшер при старте сцены,
-        // так как AudioMixer сбрасывает настройки при перезапуске игры
-        SetMusicVolume(musicSlider.value);
-        SetSFXVolume(sfxSlider.value);
+        if (musicSlider != null) SetMusicVolume(musicSlider.value);
+        if (sfxSlider != null) SetSFXVolume(sfxSlider.value);
     }
 
     public void SetMusicVolume(float value)
     {
         PlayerPrefs.SetFloat("MusicVol", value);
-
-        // Формула: Log10(0.0001) * 20 = -80dB (тишина), Log10(1) * 20 = 0dB (громко)
+        if (mainMixer == null) return;
         float dB = Mathf.Log10(Mathf.Clamp(value, 0.0001f, 1f)) * 20;
-
-        if (mainMixer != null)
-        {
-            // SetFloat возвращает false, если параметр не найден
-            bool result = mainMixer.SetFloat("MusicVol", dB);
-            if (!result)
-            {
-                Debug.LogError("SettingsMenu: Не найден параметр 'MusicVol' в AudioMixer! \n" +
-                               "1. Выдели группу Music в AudioMixer.\n" +
-                               "2. ПКМ по Volume -> Expose.\n" +
-                               "3. В списке Exposed Parameters переименуй его в 'MusicVol'.");
-            }
-        }
+        mainMixer.SetFloat("MusicVol", dB);
     }
 
     public void SetSFXVolume(float value)
     {
         PlayerPrefs.SetFloat("SFXVol", value);
-
+        if (mainMixer == null) return;
         float dB = Mathf.Log10(Mathf.Clamp(value, 0.0001f, 1f)) * 20;
-
-        if (mainMixer != null)
-        {
-            bool result = mainMixer.SetFloat("SFXVol", dB);
-            if (!result)
-            {
-                Debug.LogError("SettingsMenu: Не найден параметр 'SFXVol' в AudioMixer! Проверь Exposed Parameters.");
-            }
-        }
+        mainMixer.SetFloat("SFXVol", dB);
     }
 
     public void SetFullscreen(bool isFullscreen)
@@ -2322,34 +2372,81 @@ public class SettingsMenu : MonoBehaviour
     {
         if (activeSprite != null && inactiveSprite != null)
         {
-            if (fullscreenBtnImage != null)
-                fullscreenBtnImage.sprite = isFullscreen ? activeSprite : inactiveSprite;
-
-            if (windowedBtnImage != null)
-                windowedBtnImage.sprite = !isFullscreen ? activeSprite : inactiveSprite;
+            if (fullscreenBtnImage != null) fullscreenBtnImage.sprite = isFullscreen ? activeSprite : inactiveSprite;
+            if (windowedBtnImage != null) windowedBtnImage.sprite = !isFullscreen ? activeSprite : inactiveSprite;
         }
     }
 
-    // --- ЛОГИКА ОТКРЫТИЯ ---
-
     public void Open(System.Action onBackAction)
     {
-        _onBackCallback = onBackAction; // Запоминаем, кто нас позвал
+        _onBackCallback = onBackAction;
         gameObject.SetActive(true);
+        if (_canvasGroup != null)
+        {
+            _canvasGroup.alpha = 1f;
+            _canvasGroup.interactable = true;
+            _canvasGroup.blocksRaycasts = true;
+        }
+        ApplyCurrentSettings();
     }
 
     public void CloseSettings()
     {
-        PlayerPrefs.Save();
-        Hide();
+        // --- ЗВУК ЗАКРЫТИЯ ---
+        if (UIManager.Instance != null)
+            UIManager.Instance.PlaySound(UIManager.Instance.menuCloseSound);
+        // ---------------------
 
-        // Вызываем код возврата (если он был передан)
+        PlayerPrefs.Save();
+        gameObject.SetActive(false);
         _onBackCallback?.Invoke();
     }
+}
 
-    private void Hide()
+================================================================================
+ФАЙЛ: C:\Users\mexanik01\Documents\GameDev\Safe Rabbit\Rabbit\Assets\Sctipts\UI\UIButtonSound.cs
+================================================================================
+
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems; // Нужно для отслеживания наведения мыши
+
+[RequireComponent(typeof(Button))]
+public class UIButtonSound : MonoBehaviour, IPointerEnterHandler
+{
+    // Если хочешь для конкретной кнопки свой звук, назначь сюда.
+    // Если пусто — будет стандартный "Щелк" из UIManager.
+    public AudioClip customClickSound;
+    public bool playHoverSound = true;
+
+    private Button _button;
+
+    void Start()
     {
-        gameObject.SetActive(false);
+        _button = GetComponent<Button>();
+
+        // Подписываемся на клик кнопки
+        _button.onClick.AddListener(PlayClick);
+    }
+
+    private void PlayClick()
+    {
+        if (UIManager.Instance == null) return;
+
+        // Выбираем звук: либо кастомный, либо стандартный из менеджера
+        AudioClip clipToPlay = customClickSound != null ? customClickSound : UIManager.Instance.buttonClickSound;
+
+        UIManager.Instance.PlaySound(clipToPlay);
+    }
+
+    // Этот метод срабатывает, когда мышка наводится на кнопку
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        if (!playHoverSound || _button.interactable == false) return;
+
+        // Обычно для ховера звук тихий, можно использовать тот же click или другой
+        // Если хочешь отдельный звук ховера, добавь его в UIManager
+        // Пока просто не будем играть ничего или (опционально) тот же клик
     }
 }
 
@@ -2358,26 +2455,34 @@ public class SettingsMenu : MonoBehaviour
 ================================================================================
 
 using UnityEngine;
+using UnityEngine.Audio;
 
 public class UIManager : MonoBehaviour
 {
     public static UIManager Instance { get; private set; }
-    
+
     [Header("Аудио")]
+    // Перетащи сюда группу SFX в префабе UI
+    public AudioMixerGroup sfxGroup;
     public AudioSource uiAudioSource;
     public AudioClip buttonClickSound;
     public AudioClip menuOpenSound;
     public AudioClip menuCloseSound;
-    
+
     private void Awake()
     {
         if (Instance == null)
         {
             Instance = this;
-            // НЕ используем DontDestroyOnLoad - у каждой сцены свой UIManager
+        }
+
+        // Привязываем к микшеру
+        if (sfxGroup != null && uiAudioSource != null)
+        {
+            uiAudioSource.outputAudioMixerGroup = sfxGroup;
         }
     }
-    
+
     public void PlaySound(AudioClip clip)
     {
         if (uiAudioSource != null && clip != null)
@@ -2385,8 +2490,7 @@ public class UIManager : MonoBehaviour
             uiAudioSource.PlayOneShot(clip);
         }
     }
-    
-    // Общие методы для всех меню
+
     public void ShowCanvasGroup(CanvasGroup canvasGroup)
     {
         if (canvasGroup != null)
@@ -2396,7 +2500,7 @@ public class UIManager : MonoBehaviour
             canvasGroup.blocksRaycasts = true;
         }
     }
-    
+
     public void HideCanvasGroup(CanvasGroup canvasGroup)
     {
         if (canvasGroup != null)

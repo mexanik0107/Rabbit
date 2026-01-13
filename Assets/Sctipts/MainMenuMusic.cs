@@ -1,29 +1,24 @@
 using UnityEngine;
-using UnityEngine.Audio; // Нужно для работы с микшером
+using UnityEngine.Audio;
 
 [RequireComponent(typeof(AudioSource))]
 public class MainMenuMusic : MonoBehaviour
 {
     [Header("Settings")]
-    [Tooltip("Список треков для случайного воспроизведения")]
-    public AudioClip[] playlist;
+    public AudioClip[] playlist; // Список треков
 
     [Header("Audio Mixing")]
-    [Tooltip("Перетащи сюда группу 'Music' из Audio Mixer")]
     public AudioMixerGroup musicOutputGroup;
 
     private AudioSource _audioSource;
-    private int _lastTrackIndex = -1;
+    private int _lastTrackIndex = -1; // Запоминаем последний трек, чтобы не повторяться
 
     void Awake()
     {
         _audioSource = GetComponent<AudioSource>();
-
-        // Сразу настраиваем AudioSource
         _audioSource.playOnAwake = false;
-        _audioSource.loop = false; // Мы будем менять треки сами, поэтому авто-повтор выключаем
+        _audioSource.loop = false;
 
-        // Автоматически назначаем группу микшера, если она указана в инспекторе
         if (musicOutputGroup != null)
         {
             _audioSource.outputAudioMixerGroup = musicOutputGroup;
@@ -37,7 +32,6 @@ public class MainMenuMusic : MonoBehaviour
 
     void Update()
     {
-        // Если музыка закончилась (и игра не на паузе), включаем следующую
         if (!_audioSource.isPlaying)
         {
             PlayRandomTrack();
@@ -50,7 +44,7 @@ public class MainMenuMusic : MonoBehaviour
 
         int newIndex;
 
-        // Если у нас больше 1 трека, стараемся не играть один и тот же два раза подряд
+        // Алгоритм выбора трека (избегает повторений подряд)
         if (playlist.Length > 1)
         {
             do

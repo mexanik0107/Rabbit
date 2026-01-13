@@ -21,22 +21,18 @@ public class PauseMenu : MonoBehaviour
         InitializeButtons();
         Hide();
 
-        // Гарантируем, что настройки скрыты при старте
         if (settingsMenu != null) settingsMenu.gameObject.SetActive(false);
     }
 
     private void InitializeButtons()
     {
-        // 1. Resume Button
         if (resumeButton != null)
         {
             resumeButton.onClick.AddListener(ResumeGame);
-            // Авто-добавление звука клика
             if (resumeButton.GetComponent<UIButtonSound>() == null)
                 resumeButton.gameObject.AddComponent<UIButtonSound>();
         }
 
-        // 2. Settings Button
         if (settingsButton != null)
         {
             settingsButton.onClick.AddListener(OpenSettings);
@@ -44,7 +40,6 @@ public class PauseMenu : MonoBehaviour
                 settingsButton.gameObject.AddComponent<UIButtonSound>();
         }
 
-        // 3. Main Menu Button
         if (mainMenuButton != null)
         {
             mainMenuButton.onClick.AddListener(ReturnToMainMenu);
@@ -55,17 +50,17 @@ public class PauseMenu : MonoBehaviour
 
     private void Update()
     {
-        // Если Game Over, пауза не работает
+        // Если игра закончилась, пауза недоступна
         if (GameManager.Instance != null && !GameManager.Instance.IsGameActive) return;
 
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            // ПРИОРИТЕТ 1: Закрываем настройки, если они открыты
+            // Приоритет 1: Закрыть настройки, если они открыты
             if (settingsMenu != null && settingsMenu.gameObject.activeSelf)
             {
                 settingsMenu.CloseSettings();
             }
-            // ПРИОРИТЕТ 2: Переключаем паузу
+            // Приоритет 2: Переключить паузу
             else
             {
                 TogglePause();
@@ -81,7 +76,6 @@ public class PauseMenu : MonoBehaviour
 
     public void Show()
     {
-        // Звук открытия паузы
         if (UIManager.Instance != null)
             UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
 
@@ -107,8 +101,6 @@ public class PauseMenu : MonoBehaviour
 
     public void ResumeGame()
     {
-        // Звук закрытия паузы (резюм)
-        // Проверяем isPaused, чтобы звук не играл при старте игры (когда Hide вызывается в Start)
         if (isPaused && UIManager.Instance != null)
             UIManager.Instance.PlaySound(UIManager.Instance.menuCloseSound);
 
@@ -117,13 +109,10 @@ public class PauseMenu : MonoBehaviour
 
     public void OpenSettings()
     {
-        // --- ВОТ ЭТО БЫЛО ПРОПУЩЕНО ---
-        // Играем звук открытия меню
         if (UIManager.Instance != null)
             UIManager.Instance.PlaySound(UIManager.Instance.menuOpenSound);
-        // ------------------------------
 
-        // Скрываем паузу визуально (но время стоит)
+        // Прячем меню паузы, но игру оставляем на паузе
         if (pauseMenuPanel != null)
         {
             pauseMenuPanel.alpha = 0;
@@ -135,7 +124,7 @@ public class PauseMenu : MonoBehaviour
         {
             settingsMenu.Open(() =>
             {
-                // Callback: когда настройки закроются, снова показываем панель паузы
+                // Callback: возвращаем меню паузы, когда закрыли настройки
                 if (pauseMenuPanel != null)
                 {
                     pauseMenuPanel.alpha = 1;
@@ -148,14 +137,14 @@ public class PauseMenu : MonoBehaviour
 
     private void ReturnToMainMenu()
     {
-        ResumeGameTime();
+        ResumeGameTime(); // Обязательно восстанавливаем время перед сменой сцены
         if (SceneLoader.Instance != null) SceneLoader.Instance.LoadScene(MENU_SCENE_NAME);
         else SceneManager.LoadScene(MENU_SCENE_NAME);
     }
 
     private void PauseGame()
     {
-        Time.timeScale = 0f;
+        Time.timeScale = 0f; // Заморозка времени
         isPaused = true;
     }
 

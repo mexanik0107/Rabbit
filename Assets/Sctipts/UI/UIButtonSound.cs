@@ -1,12 +1,11 @@
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.EventSystems; // Нужно для отслеживания наведения мыши
+using UnityEngine.EventSystems;
 
 [RequireComponent(typeof(Button))]
 public class UIButtonSound : MonoBehaviour, IPointerEnterHandler
 {
-    // Если хочешь для конкретной кнопки свой звук, назначь сюда.
-    // Если пусто — будет стандартный "Щелк" из UIManager.
+    // Опциональный кастомный звук для уникальных кнопок
     public AudioClip customClickSound;
     public bool playHoverSound = true;
 
@@ -15,8 +14,6 @@ public class UIButtonSound : MonoBehaviour, IPointerEnterHandler
     void Start()
     {
         _button = GetComponent<Button>();
-
-        // Подписываемся на клик кнопки
         _button.onClick.AddListener(PlayClick);
     }
 
@@ -24,19 +21,16 @@ public class UIButtonSound : MonoBehaviour, IPointerEnterHandler
     {
         if (UIManager.Instance == null) return;
 
-        // Выбираем звук: либо кастомный, либо стандартный из менеджера
+        // Если кастомный звук не назначен, берем стандартный из UIManager
         AudioClip clipToPlay = customClickSound != null ? customClickSound : UIManager.Instance.buttonClickSound;
 
         UIManager.Instance.PlaySound(clipToPlay);
     }
 
-    // Этот метод срабатывает, когда мышка наводится на кнопку
+    // Событие наведения мыши
     public void OnPointerEnter(PointerEventData eventData)
     {
         if (!playHoverSound || _button.interactable == false) return;
-
-        // Обычно для ховера звук тихий, можно использовать тот же click или другой
-        // Если хочешь отдельный звук ховера, добавь его в UIManager
-        // Пока просто не будем играть ничего или (опционально) тот же клик
+        // Здесь можно добавить звук наведения (Hover), если нужно
     }
 }

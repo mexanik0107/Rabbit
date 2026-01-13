@@ -4,11 +4,12 @@ using UnityEngine;
 [RequireComponent(typeof(Collider2D))]
 public class Projectile : MonoBehaviour
 {
-    [HideInInspector] public float speed;   // �������� ������� �� ������ ��� ��������
-    [HideInInspector] public float damage;  // ���� ������� �� ������ ��� ��������
+    // Скрываем в инспекторе, так как устанавливаем эти значения из PlayerShooting
+    [HideInInspector] public float speed;
+    [HideInInspector] public float damage;
 
     private Rigidbody2D _rb;
-    private float _lifetime = 5f; // ������ �� ������ ������: ���� �������� ����� 5 ���, ���� �� � ���� �� �������
+    private float _lifetime = 5f; // Время жизни, чтобы пули не копились бесконечно
 
     void Awake()
     {
@@ -17,27 +18,26 @@ public class Projectile : MonoBehaviour
 
     void Start()
     {
-        // ������� �������� "�����" ������������ ���������� ����
-        // (� 2D "����" ������� ������ ��������� �� ����������� ������)
+        // Задаем начальную скорость по направлению "вверх" (локальная ось Y пули)
         _rb.linearVelocity = transform.up * speed;
 
-        // ���������� ���� ����� �����, ����� �� �������� �����
+        // Уничтожаем объект через _lifetime секунд
         Destroy(gameObject, _lifetime);
     }
 
     void OnTriggerEnter2D(Collider2D collision)
     {
-        // ���������, ���� �� � ������� �������� (��� ��� ������ EnemyHealth)
+        // Пытаемся получить здоровье врага
         EnemyHealth enemy = collision.GetComponent<EnemyHealth>();
 
         if (enemy != null)
         {
             enemy.TakeDamage(damage);
-            Destroy(gameObject); // ���������� ���� ��� ���������
+            Destroy(gameObject); // Уничтожаем пулю при попадании
         }
+        // Уничтожаем пулю, если попали в стену (не игрок и не триггер)
         else if (!collision.CompareTag("Player") && !collision.isTrigger)
         {
-            // ���������� ����, ���� ��� ������ � ����� (�� � ������ � �� � �������)
             Destroy(gameObject);
         }
     }

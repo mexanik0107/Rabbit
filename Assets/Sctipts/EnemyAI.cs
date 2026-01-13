@@ -7,29 +7,30 @@ using UnityEngine.Audio;
 [RequireComponent(typeof(SpriteRenderer))]
 public class EnemyAI : MonoBehaviour
 {
-    [Header("Targeting")]
+    [Header("Поиск цели")]
     public Transform player;
     public bool findPlayerAutomatically = true;
 
-    [Header("Jump Movement Settings")]
+    [Header("Прыжки")]
     public float jumpSpeed = 6f;
     public float jumpDuration = 0.6f;
-    public float jumpInterval = 1f;
+    public float jumpInterval = 1f; // Пауза между прыжками
+    // Кривая для анимации "сжатия/растяжения" при прыжке
     public AnimationCurve jumpScaleCurve = new AnimationCurve(new Keyframe(0, 0), new Keyframe(0.5f, 0.5f), new Keyframe(1, 0));
 
-    [Header("Visuals & Animation")]
+    [Header("Визуал")]
     [Range(0.1f, 3f)] public float sizeMultiplier = 1.0f;
     public float animationFps = 10f;
-    public Sprite[] idleSprites;
-    public Sprite[] jumpSprites;
+    public Sprite[] idleSprites; // Спрайты покоя
+    public Sprite[] jumpSprites; // Спрайты прыжка
 
-    [Header("Stats")]
+    [Header("Параметры")]
     public float rotationSpeed = 10f;
     public float attackRange = 1.5f;
     public float attackCooldown = 1f;
-    public float cutenessDamage = 10f;
+    public float cutenessDamage = 10f; // Урон милотой
 
-    [Header("Audio")]
+    [Header("Аудио")]
     public AudioMixerGroup sfxGroup;
     public AudioClip attackSound;
     public AudioClip jumpSound;
@@ -47,7 +48,6 @@ public class EnemyAI : MonoBehaviour
         _audioSource = GetComponent<AudioSource>();
         _spriteRenderer = GetComponent<SpriteRenderer>();
 
-        // Привязываем к микшеру
         if (sfxGroup != null && _audioSource != null)
         {
             _audioSource.outputAudioMixerGroup = sfxGroup;
@@ -64,6 +64,7 @@ public class EnemyAI : MonoBehaviour
             if (playerObj != null) player = playerObj.transform;
         }
 
+        // Запускаем независимые корутины для поведения и анимации
         StartCoroutine(RabbitBehaviorRoutine());
         StartCoroutine(AnimationRoutine());
     }
@@ -73,6 +74,7 @@ public class EnemyAI : MonoBehaviour
         HandleAttackLogic();
     }
 
+    // Корутина для покадровой анимации (меняет спрайты)
     private IEnumerator AnimationRoutine()
     {
         int frameIndex = 0;
@@ -80,11 +82,14 @@ public class EnemyAI : MonoBehaviour
 
         while (true)
         {
+            // Выбираем массив спрайтов в зависимости от состояния
             Sprite[] currentClips = _isJumping ? jumpSprites : idleSprites;
+
             if (currentClips != null && currentClips.Length > 0)
             {
                 float frameDuration = 1f / animationFps;
                 timer += Time.deltaTime;
+
                 if (timer >= frameDuration)
                 {
                     timer = 0f;
@@ -100,6 +105,7 @@ public class EnemyAI : MonoBehaviour
     private void HandleAttackLogic()
     {
         if (player == null) return;
+
         float distanceToPlayer = Vector2.Distance(transform.position, player.position);
 
         if (distanceToPlayer <= attackRange)
@@ -115,36 +121,40 @@ public class EnemyAI : MonoBehaviour
     {
         _lastAttackTime = Time.time;
 
-        // --- ИЗМЕНЕНИЕ: Звук атаки отключен ---
-        // if (attackSound != null) _audioSource.PlayOneShot(attackSound);
-        // --------------------------------------
+        if (attackSound != null) _audioSource.PlayOneShot(attackSound);
 
         if (player != null)
         {
             PlayerCuteness playerCuteness = player.GetComponent<PlayerCuteness>();
             if (playerCuteness != null)
             {
+                // Наносим "урон" милотой
                 playerCuteness.AddCuteness(cutenessDamage);
             }
         }
     }
 
+    // Основной цикл поведения AI
     private IEnumerator RabbitBehaviorRoutine()
     {
+        // Случайная задержка на старте, чтобы враги не прыгали синхронно
         yield return new WaitForSeconds(Random.Range(0f, 1f));
 
         while (true)
         {
             _isJumping = false;
+
+            // Фаза подготовки (вращение к игроку)
             float timer = 0f;
             while (timer < jumpInterval)
             {
                 RotateTowardsPlayer();
-                transform.localScale = GetCurrentTargetSize();
+                transform.localScale = GetCurrentTargetSize(); // Сброс скейла
                 timer += Time.deltaTime;
                 yield return null;
             }
 
+            // Фаза прыжка
             if (player != null)
             {
                 yield return StartCoroutine(PerformJump());
@@ -155,9 +165,10 @@ public class EnemyAI : MonoBehaviour
     private IEnumerator PerformJump()
     {
         _isJumping = true;
+
+        // Прыгаем в направлении, где был игрок в начале прыжка
         Vector2 jumpDirection = (player.position - transform.position).normalized;
 
-        // Звук прыжка остался
         if (jumpSound != null) _audioSource.PlayOneShot(jumpSound);
 
         float timeElapsed = 0f;
@@ -167,9 +178,14 @@ public class EnemyAI : MonoBehaviour
         {
             timeElapsed += Time.deltaTime;
             float t = timeElapsed / jumpDuration;
+
+            // Физическое перемещение
             _rb.MovePosition(_rb.position + jumpDirection * jumpSpeed * Time.fixedDeltaTime);
+
+            // Визуальный эффект "желе" через AnimationCurve
             float curveValue = jumpScaleCurve.Evaluate(t);
             transform.localScale = startJumpSize * (1f + curveValue);
+
             yield return new WaitForFixedUpdate();
         }
 
@@ -181,6 +197,7 @@ public class EnemyAI : MonoBehaviour
     {
         if (player == null) return;
         Vector2 direction = player.position - transform.position;
+        // -90 нужно, если спрайт врага смотрит вверх по умолчанию
         float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
         Quaternion targetRotation = Quaternion.Euler(0, 0, angle);
         transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
@@ -191,6 +208,7 @@ public class EnemyAI : MonoBehaviour
         return _baseEditorScale * sizeMultiplier;
     }
 
+    // Рисуем радиус атаки в редакторе
     void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.red;

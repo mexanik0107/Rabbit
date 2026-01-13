@@ -5,21 +5,21 @@ using UnityEngine.Audio;
 [RequireComponent(typeof(CanvasGroup))]
 public class SettingsMenu : MonoBehaviour
 {
-    [Header("Audio Settings")]
-    public AudioMixer mainMixer;
+    [Header("Настройки Аудио")]
+    public AudioMixer mainMixer; // Ссылка на ассет микшера
     public Slider musicSlider;
     public Slider sfxSlider;
 
-    [Header("Screen Settings")]
+    [Header("Настройки Экрана")]
     public Button fullscreenBtn;
     public Button windowedBtn;
     public Button backButton;
 
-    [Header("Visuals")]
+    [Header("Визуал")]
     public Image fullscreenBtnImage;
     public Image windowedBtnImage;
-    public Sprite activeSprite;
-    public Sprite inactiveSprite;
+    public Sprite activeSprite;   // Спрайт активной кнопки
+    public Sprite inactiveSprite; // Спрайт неактивной кнопки
 
     private System.Action _onBackCallback;
     private CanvasGroup _canvasGroup;
@@ -29,11 +29,11 @@ public class SettingsMenu : MonoBehaviour
         _canvasGroup = GetComponent<CanvasGroup>();
         InitializeSettings();
 
-        // Подписки на события
+        // Подписываемся на изменения слайдеров
         if (musicSlider != null) musicSlider.onValueChanged.AddListener(SetMusicVolume);
         if (sfxSlider != null) sfxSlider.onValueChanged.AddListener(SetSFXVolume);
 
-        // Для кнопок добавляем звуки и логику
+        // Настраиваем кнопки
         SetupButton(fullscreenBtn, () => SetFullscreen(true));
         SetupButton(windowedBtn, () => SetFullscreen(false));
         SetupButton(backButton, CloseSettings);
@@ -46,13 +46,11 @@ public class SettingsMenu : MonoBehaviour
         }
     }
 
-    // Вспомогательный метод чтобы вешать и логику, и звук
     private void SetupButton(Button btn, UnityEngine.Events.UnityAction action)
     {
         if (btn != null)
         {
             btn.onClick.AddListener(action);
-            // Автоматически вешаем скрипт звука, если его нет
             if (btn.GetComponent<UIButtonSound>() == null)
                 btn.gameObject.AddComponent<UIButtonSound>();
         }
@@ -65,6 +63,7 @@ public class SettingsMenu : MonoBehaviour
 
     private void InitializeSettings()
     {
+        // Загрузка сохраненных настроек (PlayerPrefs)
         float savedMusic = PlayerPrefs.GetFloat("MusicVol", 0.75f);
         float savedSFX = PlayerPrefs.GetFloat("SFXVol", 0.75f);
 
@@ -85,6 +84,9 @@ public class SettingsMenu : MonoBehaviour
     {
         PlayerPrefs.SetFloat("MusicVol", value);
         if (mainMixer == null) return;
+
+        // Преобразование линейного значения слайдера (0-1) в децибелы (логарифмическая шкала)
+        // 0.0001f нужен, чтобы не получить log(0) = -бесконечность
         float dB = Mathf.Log10(Mathf.Clamp(value, 0.0001f, 1f)) * 20;
         mainMixer.SetFloat("MusicVol", dB);
     }
@@ -128,13 +130,11 @@ public class SettingsMenu : MonoBehaviour
 
     public void CloseSettings()
     {
-        // --- ЗВУК ЗАКРЫТИЯ ---
         if (UIManager.Instance != null)
             UIManager.Instance.PlaySound(UIManager.Instance.menuCloseSound);
-        // ---------------------
 
         PlayerPrefs.Save();
         gameObject.SetActive(false);
-        _onBackCallback?.Invoke();
+        _onBackCallback?.Invoke(); // Вызываем действие "Назад"
     }
 }
